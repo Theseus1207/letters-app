@@ -222,11 +222,11 @@
 // 設定：填入 Supabase 專案的 URL 與 anon（publishable）key
 // 兩個都留空 → 示範模式（資料只存在這個瀏覽器）
 // =========================================================
-const SUPABASE_URL = '';
-const SUPABASE_ANON_KEY = '';
+const SUPABASE_URL = 'https://jujfioohhyweddfaxtjc.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_Jx9FjkC-RjZjQO2IDJdGlw_ndWf5EEL';
 // 推播用的 VAPID 公鑰（npx web-push generate-vapid-keys 產生的 Public Key）
 // 留空 → 只有 App 開著時的即時通知，沒有背景推播
-const VAPID_PUBLIC_KEY = '';
+const VAPID_PUBLIC_KEY = 'BBnmF6goI-aw-l4Ji2mMsM6iu-RvZBZPmXEC0lH1qUhnukGq4MzH3b01eLl6RpGfbrZnW0VH9ZpNMc2hj9HeQrk';
 const DEMO = !SUPABASE_URL || !SUPABASE_ANON_KEY;
 
 const MAX_HTML = 20000;
