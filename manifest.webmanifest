@@ -1,0 +1,16 @@
+{
+  "name": "信箋與漂流瓶",
+  "short_name": "信箋",
+  "description": "寫信給朋友，或把漂流瓶丟給陌生人。",
+  "lang": "zh-Hant",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f2ede3",
+  "theme_color": "#f2ede3",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

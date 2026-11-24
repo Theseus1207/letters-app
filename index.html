@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>信箋與漂流瓶</title>
+<meta name="description" content="寫信給朋友，或把漂流瓶丟給陌生人。">
+<meta name="theme-color" content="#f2ede3">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="信箋">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<style>
+  :root {
+    --paper: #fbf7ef;
+    --paper-line: #e9dfcc;
+    --ink: #2f2a24;
+    --muted: #8a7f70;
+    --accent: #3d6f8e;
+    --accent-soft: #e3eef4;
+    --danger: #a5463b;
+    --card: #ffffff;
+    --border: #e4dccd;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0; background: #f2ede3; color: var(--ink);
+    font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+    line-height: 1.6;
+  }
+  header {
+    position: sticky; top: 0; z-index: 5; background: #f2ede3ee; backdrop-filter: blur(6px);
+    border-bottom: 1px solid var(--border);
+  }
+  .bar { max-width: 760px; margin: 0 auto; padding: 12px 16px 0; display: flex; align-items: center; gap: 8px; }
+  .brand { font-weight: 700; font-size: 1.1rem; flex: 1; }
+  .who { font-size: .85rem; color: var(--muted); }
+  .brand { white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .bar .btn { padding: 4px 10px !important; font-size: .85rem !important; white-space: nowrap; }
+  @media (max-width: 480px) {
+    .who, .brand .long { display: none; }
+    .bar { gap: 6px; }
+  }
+  nav { max-width: 760px; margin: 0 auto; display: flex; gap: 4px; padding: 8px 12px 0; overflow-x: auto; }
+  nav button {
+    border: 0; background: none; padding: 8px 12px; font: inherit; color: var(--muted);
+    border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap;
+  }
+  nav button.on { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+  nav .badge { background: var(--danger); color: #fff; border-radius: 999px; font-size: .7rem; padding: 0 6px; margin-left: 4px; }
+  main { max-width: 760px; margin: 0 auto; padding: 16px; }
+  h1, h2 { margin: 0 0 12px; }
+  h2 { font-size: 1.15rem; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
+  .demo-note { background: #fff6dc; border: 1px solid #ecd9a0; border-radius: var(--radius); padding: 10px 14px; font-size: .9rem; margin-bottom: 16px; }
+  label { display: block; font-size: .9rem; color: var(--muted); margin: 10px 0 4px; }
+  input[type=text], input[type=email], input[type=password], textarea {
+    width: 100%; padding: 10px 12px; font: inherit; border: 1px solid var(--border); border-radius: 8px; background: #fff;
+  }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--accent); background: var(--accent); color: #fff;
+    padding: 9px 16px; border-radius: 8px; font: inherit; cursor: pointer;
+  }
+  .btn.ghost { background: #fff; color: var(--accent); }
+  .btn.danger { background: #fff; color: var(--danger); border-color: var(--danger); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+  .muted { color: var(--muted); font-size: .9rem; }
+  .error { color: var(--danger); font-size: .9rem; margin-top: 8px; min-height: 1.2em; }
+
+  /* ---------- 文書編輯器 ---------- */
+  .editor { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--paper); }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 2px; padding: 6px; border-bottom: 1px solid var(--border); background: #fff; }
+  .toolbar button {
+    min-width: 36px; height: 34px; border: 1px solid transparent; background: none; border-radius: 6px;
+    font: inherit; font-size: .95rem; cursor: pointer; color: var(--ink);
+  }
+  .toolbar button:hover { background: #f3efe6; }
+  .toolbar button.on { background: var(--accent-soft); border-color: #bcd5e3; color: var(--accent); }
+  .toolbar .sep { width: 1px; background: var(--border); margin: 4px 4px; }
+  .editable, .letter-body {
+    padding: 16px 18px; min-height: 220px; outline: none;
+    background-image: repeating-linear-gradient(transparent, transparent 31px, var(--paper-line) 32px);
+    line-height: 32px; font-size: 1.02rem;
+    background-position: 0 16px; background-attachment: local;
+  }
+  .editable { cursor: text; }
+  .editable.empty::before { content: attr(data-placeholder); color: var(--muted); pointer-events: none; position: absolute; }
+  .editable p, .letter-body p, .editable div, .letter-body div { margin: 0; }
+  .editable ul, .editable ol, .letter-body ul, .letter-body ol { margin: 0; padding-left: 1.6em; }
+  .editable blockquote, .letter-body blockquote { margin: 0; padding-left: 12px; border-left: 3px solid var(--accent); color: #5b544b; }
+  .editable h2, .letter-body h2 { font-size: 1.25rem; margin: 0; line-height: 32px; }
+  .count { font-size: .8rem; color: var(--muted); text-align: right; padding: 4px 10px; background: #fff; border-top: 1px solid var(--border); }
+
+  /* ---------- 信件列表 ---------- */
+  .list { list-style: none; margin: 0; padding: 0; }
+  .item {
+    display: flex; gap: 12px; align-items: center; padding: 12px; border: 1px solid var(--border); background: #fff;
+    border-radius: 10px; margin-bottom: 8px; cursor: pointer;
+  }
+  .item:hover { border-color: #cdbfa6; }
+  .item .icon { font-size: 1.4rem; }
+  .item .main { flex: 1; min-width: 0; }
+  .item .from { font-weight: 600; }
+  .item .subj { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .date { font-size: .8rem; color: var(--muted); white-space: nowrap; }
+  .item.unread .from::after { content: "●"; color: var(--danger); font-size: .7rem; margin-left: 6px; vertical-align: middle; }
+  .empty-state { text-align: center; padding: 40px 16px; color: var(--muted); }
+
+  .letter { background: var(--paper); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 16px; }
+  .letter-head { padding: 14px 18px; border-bottom: 1px solid var(--paper-line); }
+  .letter-head .subj { font-size: 1.1rem; font-weight: 700; }
+  .sea { background: linear-gradient(#e3eef4, #cfe2ec); border-color: #bcd5e3; }
+  header { padding-top: env(safe-area-inset-top); }
+  main { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+  .tip {
+    max-width: 760px; margin: 12px auto 0; padding: 12px 14px; background: #fff; border: 1px solid #bcd5e3;
+    border-radius: var(--radius); font-size: .92rem; display: flex; gap: 10px; align-items: flex-start;
+  }
+  .tip .x { border: 0; background: none; font-size: 1.1rem; color: var(--muted); cursor: pointer; padding: 0 4px; }
+  .overlay {
+    position: fixed; inset: 0; background: #0006; z-index: 30; display: flex; align-items: flex-end; justify-content: center;
+  }
+  .sheet {
+    background: #fff; width: 100%; max-width: 480px; border-radius: 18px 18px 0 0; padding: 20px 20px calc(20px + env(safe-area-inset-bottom));
+  }
+  .sheet ol { padding-left: 1.4em; margin: 8px 0 16px; }
+  .sheet li { margin: 6px 0; }
+  .share-icon {
+    display: inline-block; width: 18px; height: 22px; vertical-align: -4px; border: 2px solid var(--accent); border-top: 0;
+    border-radius: 0 0 3px 3px; position: relative; margin: 0 2px;
+  }
+  .share-icon::before { content: "↑"; position: absolute; top: -12px; left: 1px; color: var(--accent); font-weight: 700; }
+  /* ---------- 主題 ---------- */
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .chip {
+    border: 1px solid var(--border); background: #fff; border-radius: 999px; padding: 6px 12px;
+    font: inherit; font-size: .92rem; cursor: pointer; color: var(--ink);
+  }
+  .chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip .n { font-size: .75rem; opacity: .75; margin-left: 4px; }
+  .topic-tag {
+    display: inline-block; font-size: .78rem; font-weight: 500; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 0 8px; margin-left: 6px; vertical-align: 1px;
+  }
+  .topic-desc { font-size: .85rem; color: var(--muted); min-height: 1.3em; margin-top: 6px; }
+
+  /* ---------- 管理頁 ---------- */
+  .trow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .trow:last-child { border-bottom: 0; }
+  .trow .emo { font-size: 1.4rem; width: 32px; text-align: center; }
+  .trow .info { flex: 1; min-width: 140px; }
+  .trow .nm { font-weight: 600; }
+  .trow .ds { font-size: .85rem; color: var(--muted); }
+  .trow.off .nm, .trow.off .emo { opacity: .45; }
+  .trow .actions { display: flex; gap: 4px; flex-wrap: wrap; }
+  .pill { font-size: .72rem; font-weight: 400; border-radius: 999px; padding: 1px 7px; background: #eee; color: #666; margin-left: 6px; }
+  .icon-btn {
+    border: 1px solid var(--border); background: #fff; border-radius: 8px; min-width: 34px; height: 32px;
+    cursor: pointer; font: inherit; font-size: .85rem; padding: 0 8px; color: var(--ink);
+  }
+  .icon-btn:disabled { opacity: .35; cursor: default; }
+  .icon-btn.danger { color: var(--danger); }
+  .form-grid { display: grid; grid-template-columns: 72px 1fr; gap: 8px; }
+  @media (max-width: 480px) { .trow .actions { width: 100%; padding-left: 40px; } }
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #2f2a24; color: #fff;
+    padding: 10px 18px; border-radius: 999px; font-size: .9rem; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 20;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<header id="header" hidden>
+  <div class="bar">
+    <div class="brand">✉️ 信箋<span class="long">與漂流瓶</span></div>
+    <button class="btn ghost" id="install" hidden style="padding:4px 10px;font-size:.85rem">📲 安裝</button>
+    <button class="btn ghost" id="bell" hidden style="padding:4px 10px;font-size:.85rem">🔔 開啟通知</button>
+    <span class="who" id="who"></span>
+    <button class="btn ghost" id="logout" style="padding:4px 10px;font-size:.85rem">登出</button>
+  </div>
+  <nav id="nav">
+    <button data-view="inbox">收件匣<span class="badge" id="unread" hidden></span></button>
+    <button data-view="compose">寫信</button>
+    <button data-view="sea">漂流瓶</button>
+    <button data-view="sent">寄件備份</button>
+    <button data-view="admin" id="nav-admin" hidden>管理</button>
+  </nav>
+</header>
+<main id="app"></main>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+// =========================================================
+// 設定：填入 Supabase 專案的 URL 與 anon（publishable）key
+// 兩個都留空 → 示範模式（資料只存在這個瀏覽器）
+// =========================================================
+const SUPABASE_URL = 'https://jujfioohhyweddfaxtjc.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_Jx9FjkC-RjZjQO2IDJdGlw_ndWf5EEL';
+// 推播用的 VAPID 公鑰（npx web-push generate-vapid-keys 產生的 Public Key）
+// 留空 → 只有 App 開著時的即時通知，沒有背景推播
+const VAPID_PUBLIC_KEY = '';
+const DEMO = !SUPABASE_URL || !SUPABASE_ANON_KEY;
+
+const MAX_HTML = 20000;
+
+// ---------- 工具 ----------
+const $ = (sel, root = document) => root.querySelector(sel);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmt = t => new Date(t).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+function toast(msg) {
+  const el = $('#toast'); el.textContent = msg; el.classList.add('show');
+  clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+// ---------- HTML 消毒：只留下文書格式，拿掉所有屬性與危險標籤 ----------
+// 信件內容是陌生人寫的，顯示前一定要經過這一步，避免 XSS
+const ALLOWED = new Set(['P', 'BR', 'DIV', 'B', 'STRONG', 'I', 'EM', 'U', 'S', 'STRIKE', 'DEL', 'UL', 'OL', 'LI', 'BLOCKQUOTE', 'H2']);
+const DROP = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'TEMPLATE', 'NOSCRIPT', 'SVG', 'MATH', 'HEAD', 'TITLE', 'META', 'LINK', 'TEXTAREA', 'SELECT', 'BUTTON', 'INPUT', 'FORM', 'IMG', 'VIDEO', 'AUDIO']);
+function sanitize(html) {
+  const src = new DOMParser().parseFromString(String(html ?? ''), 'text/html').body;
+  const out = document.createElement('div');
+  (function walk(from, to) {
+    for (const n of from.childNodes) {
+      if (n.nodeType === Node.TEXT_NODE) to.appendChild(document.createTextNode(n.nodeValue));
+      else if (n.nodeType === Node.ELEMENT_NODE) {
+        const tag = n.tagName.toUpperCase();
+        if (DROP.has(tag)) continue;
+        if (ALLOWED.has(tag)) { const el = document.createElement(tag); to.appendChild(el); walk(n, el); }
+        else walk(n, to); // 不認識的標籤：拆掉外殼，保留裡面的文字
+      }
+    }
+  })(src, out);
+  return out.innerHTML;
+}
+const plainText = html => new DOMParser().parseFromString(String(html ?? ''), 'text/html').body.textContent.replace(/ /g, ' ').trim();
+
+// =========================================================
+// 文書編輯器（粗體、斜體、底線、刪除線、標題、引用、列點、編號）
+// =========================================================
+const TOOLS = [
+  { cmd: 'bold', label: '<b>B</b>', title: '粗體 (Ctrl+B)' },
+  { cmd: 'italic', label: '<i>I</i>', title: '斜體 (Ctrl+I)' },
+  { cmd: 'underline', label: '<u>U</u>', title: '底線 (Ctrl+U)' },
+  { cmd: 'strikeThrough', label: '<s>S</s>', title: '刪除線' },
+  { sep: true },
+  { block: 'h2', label: '標', title: '標題' },
+  { block: 'blockquote', label: '❝', title: '引用' },
+  { cmd: 'insertUnorderedList', label: '•≡', title: '項目符號' },
+  { cmd: 'insertOrderedList', label: '1.≡', title: '編號清單' },
+  { sep: true },
+  { cmd: 'undo', label: '↶', title: '復原' },
+  { cmd: 'redo', label: '↷', title: '重做' },
+  { cmd: 'removeFormat', label: '⌫', title: '清除格式' },
+];
+
+function createEditor(host, { placeholder = '親愛的……' } = {}) {
+  host.innerHTML = `
+    <div class="editor">
+      <div class="toolbar" role="toolbar" aria-label="文字格式">
+        ${TOOLS.map((t, i) => t.sep ? '<span class="sep"></span>'
+          : `<button type="button" data-i="${i}" title="${t.title}" aria-label="${t.title}">${t.label}</button>`).join('')}
+      </div>
+      <div class="editable empty" contenteditable="true" data-placeholder="${esc(placeholder)}"></div>
+      <div class="count"></div>
+    </div>`;
+  const area = $('.editable', host);
+  const bar = $('.toolbar', host);
+  const count = $('.count', host);
+
+  const exec = (cmd, val = null) => { area.focus(); document.execCommand(cmd, false, val); refresh(); };
+  const currentBlock = () => {
+    try { return String(document.queryCommandValue('formatBlock') || '').toLowerCase().replace(/[<>]/g, ''); } catch { return ''; }
+  };
+
+  // 按鈕用 mousedown 並 preventDefault，才不會把選取的文字弄丟
+  bar.addEventListener('mousedown', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    e.preventDefault();
+    const t = TOOLS[b.dataset.i];
+    try { document.execCommand('styleWithCSS', false, false); } catch {}
+    if (t.block) exec('formatBlock', currentBlock() === t.block ? '<p>' : `<${t.block}>`);
+    else exec(t.cmd);
+  });
+
+  function refresh() {
+    const isEmpty = !plainText(area.innerHTML) && !area.querySelector('li');
+    area.classList.toggle('empty', isEmpty);
+    count.textContent = `${plainText(area.innerHTML).length} 字`;
+    if (document.activeElement !== area) return;
+    const blk = currentBlock();
+    bar.querySelectorAll('button').forEach(b => {
+      const t = TOOLS[b.dataset.i];
+      let on = false;
+      if (t.block) on = blk === t.block;
+      else if (!['undo', 'redo', 'removeFormat'].includes(t.cmd)) { try { on = document.queryCommandState(t.cmd); } catch {} }
+      b.classList.toggle('on', on);
+    });
+  }
+
+  area.addEventListener('focus', () => { try { document.execCommand('defaultParagraphSeparator', false, 'p'); } catch {} });
+  area.addEventListener('input', refresh);
+  area.addEventListener('keyup', refresh);
+  area.addEventListener('mouseup', refresh);
+  document.addEventListener('selectionchange', () => { if (document.activeElement === area) refresh(); });
+
+  // 貼上時也消毒，避免把網頁的奇怪樣式、圖片、連結帶進來
+  area.addEventListener('paste', e => {
+    e.preventDefault();
+    const html = e.clipboardData.getData('text/html');
+    if (html) document.execCommand('insertHTML', false, sanitize(html));
+    else document.execCommand('insertText', false, e.clipboardData.getData('text/plain'));
+  });
+  area.addEventListener('drop', e => e.preventDefault());
+
+  refresh();
+  return {
+    getHTML: () => sanitize(area.innerHTML),
+    isEmpty: () => !plainText(area.innerHTML),
+    clear: () => { area.innerHTML = ''; refresh(); },
+    focus: () => area.focus(),
+  };
+}
+
+// =========================================================
+// 資料層：Supabase 版與示範版提供同一組函式
+// =========================================================
+async function makeSupabaseApi() {
+  const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+  const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const rpc = async (fn, args) => {
+    const { data, error } = await sb.rpc(fn, args);
+    if (error) throw new Error(error.message);
+    return data;
+  };
+  let uid = null;
+  let channel = null;
+  return {
+    async session() {
+      const { data } = await sb.auth.getSession();
+      uid = data.session?.user.id ?? null;
+      return uid ? { id: uid, email: data.session.user.email } : null;
+    },
+    async signUp(email, password) {
+      const { data, error } = await sb.auth.signUp({ email, password });
+      if (error) throw new Error(error.message);
+      if (!data.session) throw new Error('註冊成功！請到信箱點確認連結，再回來登入。');
+    },
+    async signIn(email, password) {
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) throw new Error(error.message === 'Invalid login credentials' ? '帳號或密碼錯誤' : error.message);
+    },
+    async signOut() { await sb.auth.signOut(); uid = null; },
+    async getProfile() {
+      const { data, error } = await sb.from('profiles').select('nickname').eq('id', uid).maybeSingle();
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    async createProfile(nickname) {
+      const { error } = await sb.from('profiles').insert({ id: uid, nickname });
+      if (error) throw new Error(error.code === '23505' ? '這個暱稱已經有人用了' : error.message);
+    },
+    mailbox: () => rpc('my_mailbox'),
+    send: (to, subject, body) => rpc('send_letter', { p_to: to, p_subject: subject, p_body: body }),
+    throwBottle: (subject, body, topicId) => rpc('throw_bottle', { p_subject: subject, p_body: body, p_topic_id: topicId ?? null }),
+    pickBottle: topicId => rpc('pick_bottle', { p_topic_id: topicId ?? null }),
+    // 主題與管理
+    listTopics: () => rpc('list_topics'),
+    isAdmin: () => rpc('is_admin'),
+    saveTopic: t => rpc('admin_save_topic', { p_id: t.id ?? null, p_emoji: t.emoji, p_name: t.name, p_description: t.description, p_is_active: t.is_active }),
+    deleteTopic: id => rpc('admin_delete_topic', { p_id: id }),
+    moveTopic: (id, dir) => rpc('admin_move_topic', { p_id: id, p_dir: dir }),
+    listAdmins: () => rpc('admin_list_admins'),
+    addAdmin: nickname => rpc('admin_add_admin', { p_nickname: nickname }),
+    removeAdmin: nickname => rpc('admin_remove_admin', { p_nickname: nickname }),
+    reply: (id, body) => rpc('reply_letter', { p_letter_id: id, p_body: body }),
+    markRead: id => rpc('mark_read', { p_letter_id: id }),
+    block: id => rpc('block_sender', { p_letter_id: id }),
+    report: (id, reason) => rpc('report_letter', { p_letter_id: id, p_reason: reason }),
+    // 即時通知：收聽自己的私人頻道 inbox:<id>
+    async subscribe(handler) {
+      if (channel) return;
+      const { data } = await sb.auth.getSession();
+      if (!data.session) return;
+      await sb.realtime.setAuth(data.session.access_token);
+      channel = sb.channel('inbox:' + data.session.user.id, { config: { private: true } })
+        .on('broadcast', { event: 'new_letter' }, m => handler({ type: 'new_letter', ...(m.payload || {}) }))
+        .on('broadcast', { event: 'bottle_picked' }, m => handler({ type: 'bottle_picked', ...(m.payload || {}) }))
+        .subscribe((status, err) => { if (status === 'CHANNEL_ERROR') console.warn('通知連線失敗', err); });
+    },
+    async unsubscribe() { if (channel) { await sb.removeChannel(channel); channel = null; } },
+    savePush: sub => rpc('save_push_subscription', { p_endpoint: sub.endpoint, p_p256dh: sub.keys.p256dh, p_auth: sub.keys.auth }),
+    deletePush: endpoint => rpc('delete_push_subscription', { p_endpoint: endpoint }),
+  };
+}
+
+function makeDemoApi() {
+  const KEY = 'letters-bottles-demo-v1';
+  let memory = null;
+  const load = () => { try { const s = localStorage.getItem(KEY); if (s) return JSON.parse(s); } catch {} return memory; };
+  const save = () => { memory = db; try { localStorage.setItem(KEY, JSON.stringify(db)); } catch {} };
+  const now = Date.now();
+  const seedTopics = () => [
+    { id: 1, emoji: '💭', name: '心情', description: '說說今天的心情', sort_order: 10, is_active: true },
+    { id: 2, emoji: '☀️', name: '日常', description: '生活裡的小事', sort_order: 20, is_active: true },
+    { id: 3, emoji: '🌙', name: '深夜', description: '睡不著時想說的話', sort_order: 30, is_active: true },
+    { id: 4, emoji: '🎵', name: '推薦', description: '好歌、好書、好店', sort_order: 40, is_active: true },
+    { id: 5, emoji: '🤔', name: '煩惱', description: '想聽聽陌生人的建議', sort_order: 50, is_active: true },
+  ];
+  const seed = () => ({
+    seq: 3, session: null, blocks: [], reports: [],
+    topics: seedTopics(), topicSeq: 5, admins: ['me'],
+    profiles: { bot1: { nickname: '小明' }, bot2: { nickname: '阿花' }, bot3: { nickname: '海風' } },
+    letters: [
+      { id: 1, sender: 'bot2', recipient: null, kind: 'bottle', status: 'floating', subject: '給撿到這個瓶子的你',
+        body: '<p>今天下班路上看到很漂亮的夕陽，<b>好想分享給誰</b>。</p><p>你今天過得好嗎？</p>', topic_id: 1, reply_to: null, created: now - 864e5, picked: null, read: null },
+      { id: 2, sender: 'bot3', recipient: null, kind: 'bottle', status: 'floating', subject: '三道懶人料理',
+        body: '<p>最近在學做菜，推薦你三道：</p><ul><li>番茄炒蛋</li><li>蒜炒高麗菜</li><li><i>泡麵加蛋</i>（認真的）</li></ul>', topic_id: 4, reply_to: null, created: now - 432e5, picked: null, read: null },
+      { id: 3, sender: 'bot1', recipient: null, kind: 'bottle', status: 'floating', subject: '',
+        body: '<p>深夜睡不著，丟個瓶子。</p><blockquote>如果你也醒著，就回我一句晚安吧。</blockquote>', topic_id: 3, reply_to: null, created: now - 36e5, picked: null, read: null },
+    ],
+  });
+  let db = load() || seed();
+  // 舊版示範資料升級
+  if (!db.topics) { db.topics = seedTopics(); db.topicSeq = 5; }
+  if (!db.admins) db.admins = ['me'];
+  const topicOf = id => db.topics.find(t => t.id === id);
+  const amAdmin = () => db.admins.includes('me');
+  const needAdmin = () => { if (!amAdmin()) throw new Error('只有管理者可以這樣做'); };
+  let listener = () => {};
+  const ME = 'me';
+  const blocked = (a, b) => db.blocks.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
+  const check = body => {
+    if (!db.profiles[ME]) throw new Error('請先設定暱稱');
+    if (!plainText(body)) throw new Error('信件內容不能是空的');
+    if (body.length > MAX_HTML) throw new Error('信件太長了');
+  };
+  const add = l => { const row = { id: ++db.seq, reply_to: null, picked: null, read: null, created: Date.now(), ...l }; db.letters.push(row); save(); return row.id; };
+  const BOT_REPLIES = [
+    '<p>收到你的信了，好開心！</p><p>我這邊一切都好，<b>謝謝你想到我</b>。</p>',
+    '<p>哈哈，你寫的讓我笑了好久。</p><ul><li>下次換我說個故事</li><li>記得早點睡</li></ul>',
+    '<p>謝謝你的回信。</p><blockquote>海很大，但總會有人撿到瓶子的。</blockquote>',
+  ];
+  // 示範模式：寄給機器人或回瓶子時，幾秒後會收到回信
+  const botAnswer = (botId, origId, kind, subject) => {
+    if (!botId.startsWith('bot')) return;
+    setTimeout(() => {
+      if (blocked(ME, botId)) return;
+      add({ sender: botId, recipient: ME, kind, status: 'sent', reply_to: origId, topic_id: db.letters.find(l => l.id === origId)?.topic_id ?? null,
+        subject: 'Re: ' + subject.replace(/^(Re: )+/, ''), body: BOT_REPLIES[Math.floor(Math.random() * BOT_REPLIES.length)] });
+      listener({ type: 'new_letter', kind, id: db.seq });
+    }, 4000);
+  };
+  const delay = () => new Promise(r => setTimeout(r, 150));
+  return {
+    async session() { return db.session ? { id: ME, email: '示範帳號' } : null; },
+    async signUp() { db.session = ME; save(); },
+    async signIn() { db.session = ME; save(); },
+    async signOut() { db.session = null; save(); },
+    async getProfile() { return db.profiles[ME] || null; },
+    async createProfile(nickname) {
+      if (Object.entries(db.profiles).some(([id, p]) => id !== ME && p.nickname === nickname)) throw new Error('這個暱稱已經有人用了');
+      db.profiles[ME] = { nickname };
+      if (!db.letters.some(l => l.recipient === ME))
+        add({ sender: 'bot1', recipient: ME, kind: 'letter', status: 'sent', subject: '歡迎來到這裡',
+          body: `<p>嗨 ${esc(nickname)}，</p><p>這裡可以<b>寫信給朋友</b>，也可以把心事裝進<i>漂流瓶</i>丟給陌生人。</p><ul><li>試試看回我這封信</li><li>或是到「漂流瓶」撿一個瓶子</li></ul><p>—— 小明</p>` });
+      save();
+    },
+    async mailbox() {
+      await delay();
+      return db.letters
+        .filter(l => l.sender === ME || l.recipient === ME)
+        .filter(l => !(l.recipient === ME && db.blocks.some(([a, b]) => a === ME && b === l.sender)))
+        .map(l => ({
+          id: l.id, kind: l.kind, status: l.status, direction: l.sender === ME ? 'out' : 'in',
+          other_name: l.kind === 'bottle' ? null : db.profiles[l.sender === ME ? l.recipient : l.sender]?.nickname,
+          subject: l.subject, body_html: l.body, reply_to: l.reply_to, read_at: l.read,
+          created_at: (l.recipient === ME && l.picked) || l.created,
+          topic_emoji: topicOf(l.topic_id)?.emoji ?? null, topic_name: topicOf(l.topic_id)?.name ?? null,
+        }))
+        .sort((a, b) => b.created_at - a.created_at);
+    },
+    async send(to, subject, body) {
+      check(body);
+      const target = Object.keys(db.profiles).find(id => db.profiles[id].nickname === to.trim());
+      if (target === ME) throw new Error('不能寫信給自己喔');
+      if (!target || blocked(ME, target)) throw new Error('找不到這位收件人，或對方目前無法收信（示範模式可寄給：小明、阿花、海風）');
+      const id = add({ sender: ME, recipient: target, kind: 'letter', status: 'sent', subject: subject.trim().slice(0, 100), body });
+      botAnswer(target, id, 'letter', subject || '你的信');
+      return id;
+    },
+    async throwBottle(subject, body, topicId = null) {
+      check(body);
+      if (topicId != null && !topicOf(topicId)?.is_active) throw new Error('這個主題已經關閉了，換一個吧');
+      const today = db.letters.filter(l => l.sender === ME && l.kind === 'bottle' && !l.reply_to && l.created > Date.now() - 864e5).length;
+      if (today >= 5) throw new Error('今天已經丟了 5 個瓶子，明天再來吧');
+      const id = add({ sender: ME, recipient: null, kind: 'bottle', status: 'floating', subject: subject.trim().slice(0, 100), body, topic_id: topicId });
+      // 示範模式：幾秒後由「海風」撿到你的瓶子，再回信給你
+      setTimeout(() => {
+        const b = db.letters.find(l => l.id === id);
+        if (!b || b.status !== 'floating' || blocked(ME, 'bot3')) return;
+        Object.assign(b, { recipient: 'bot3', status: 'picked', picked: Date.now() }); save();
+        listener({ type: 'bottle_picked', kind: 'bottle', id });
+        botAnswer('bot3', id, 'bottle', b.subject || '你的漂流瓶');
+      }, 6000);
+      return id;
+    },
+    async pickBottle(topicId = null) {
+      await delay();
+      const pool = db.letters.filter(l => l.status === 'floating' && l.sender !== ME && !blocked(ME, l.sender)
+        && (topicId == null || l.topic_id === topicId));
+      if (!pool.length) return null;
+      const b = pool[Math.floor(Math.random() * pool.length)];
+      Object.assign(b, { recipient: ME, status: 'picked', picked: Date.now() });
+      save();
+      return b.id;
+    },
+    async reply(id, body) {
+      check(body);
+      const orig = db.letters.find(l => l.id === id);
+      if (!orig || orig.recipient !== ME) throw new Error('只能回覆寄給你的信');
+      if (blocked(ME, orig.sender)) throw new Error('目前無法回覆這封信');
+      const subject = 'Re: ' + orig.subject.replace(/^(Re: )+/, '');
+      const nid = add({ sender: ME, recipient: orig.sender, kind: orig.kind, status: 'sent', reply_to: id, subject: subject.slice(0, 100), body, topic_id: orig.topic_id ?? null });
+      botAnswer(orig.sender, nid, orig.kind, subject);
+      return nid;
+    },
+    async markRead(id) { const l = db.letters.find(l => l.id === id && l.recipient === ME); if (l && !l.read) { l.read = Date.now(); save(); } },
+    async block(id) { const l = db.letters.find(l => l.id === id && l.recipient === ME); if (l) { db.blocks.push([ME, l.sender]); save(); } },
+    async report(id, reason) { db.reports.push({ id, reason }); save(); },
+    async subscribe(fn) { listener = fn; },
+    async unsubscribe() { listener = () => {}; },
+    async savePush() {},
+    async deletePush() {},
+    async listTopics() {
+      return db.topics.filter(t => t.is_active || amAdmin())
+        .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id)
+        .map(t => ({ ...t, floating_count: db.letters.filter(l => l.topic_id === t.id && l.status === 'floating' && l.sender !== ME).length }));
+    },
+    async isAdmin() { return amAdmin(); },
+    async saveTopic({ id, emoji, name, description, is_active }) {
+      needAdmin();
+      name = (name || '').trim();
+      if (!name) throw new Error('主題名稱不能是空的');
+      if (name.length > 20 || (description || '').length > 100) throw new Error('名稱最多 20 字、說明最多 100 字、圖示最多 8 個字元');
+      if (db.topics.some(t => t.name === name && t.id !== id)) throw new Error(`已經有叫「${name}」的主題了`);
+      const data = { emoji: (emoji || '').trim() || '🌊', name, description: (description || '').trim(), is_active: is_active ?? true };
+      if (id == null) {
+        const max = Math.max(0, ...db.topics.map(t => t.sort_order));
+        db.topics.push({ id: ++db.topicSeq, sort_order: max + 10, ...data });
+      } else {
+        const t = topicOf(id); if (!t) throw new Error('找不到這個主題');
+        Object.assign(t, data);
+      }
+      save();
+    },
+    async deleteTopic(id) {
+      needAdmin();
+      db.topics = db.topics.filter(t => t.id !== id);
+      db.letters.forEach(l => { if (l.topic_id === id) l.topic_id = null; });
+      save();
+    },
+    async moveTopic(id, dir) {
+      needAdmin();
+      const list = db.topics.sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
+      list.forEach((t, i) => t.sort_order = (i + 1) * 10);
+      const i = list.findIndex(t => t.id === id), j = i + (dir < 0 ? -1 : 1);
+      if (i < 0 || j < 0 || j >= list.length) return;
+      [list[i].sort_order, list[j].sort_order] = [list[j].sort_order, list[i].sort_order];
+      save();
+    },
+    async listAdmins() { needAdmin(); return db.admins.map(id => ({ nickname: db.profiles[id]?.nickname, is_me: id === ME })); },
+    async addAdmin(nickname) {
+      needAdmin();
+      const id = Object.keys(db.profiles).find(k => db.profiles[k].nickname === nickname.trim());
+      if (!id) throw new Error(`找不到暱稱「${nickname.trim()}」的使用者`);
+      if (!db.admins.includes(id)) db.admins.push(id);
+      save();
+    },
+    async removeAdmin(nickname) {
+      needAdmin();
+      const id = db.admins.find(k => db.profiles[k]?.nickname === nickname.trim());
+      if (!id) throw new Error('這位不是管理者');
+      if (db.admins.length <= 1) throw new Error('至少要保留一位管理者');
+      db.admins = db.admins.filter(k => k !== id); save();
+    },
+  };
+}
+
+// =========================================================
+// 畫面
+// =========================================================
+const app = $('#app');
+const state = { view: 'inbox', mail: [], openId: null, nickname: '', isAdmin: false, pickTopic: null, throwTopic: null };
+let api;
+
+const demoNote = () => DEMO ? `<div class="demo-note">示範模式：資料只存在這個瀏覽器。在 <code>index.html</code> 填入 Supabase 的 URL 與 key 就會接上真正的後端。</div>` : '';
+const letterIcon = m => m.kind === 'bottle' ? '🍾' : '💌';
+const topicTag = m => m.topic_name ? `<span class="topic-tag">${esc(m.topic_emoji || '')} ${esc(m.topic_name)}</span>` : '';
+const fromName = m => m.direction === 'in'
+  ? (m.kind === 'bottle' ? '海上的陌生人' : m.other_name || '已刪除的使用者')
+  : (m.kind === 'bottle'
+      ? (m.status === 'floating' ? '漂流瓶・還在海上漂' : m.status === 'picked' ? '漂流瓶・被陌生人撿到了' : '給海上的陌生人')
+      : '給 ' + (m.other_name || '已刪除的使用者'));
+
+function go(view, openId = null) {
+  state.view = view; state.openId = openId;
+  document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('on', b.dataset.view === view || (view === 'read' && b.dataset.view === state.from)));
+  render();
+  if (view === 'inbox') maybeShowIosTip();
+  window.scrollTo(0, 0);
+}
+
+async function loadMail() {
+  try { state.mail = await api.mailbox() || []; } catch (e) { toast(e.message); }
+  const unread = state.mail.filter(m => m.direction === 'in' && !m.read_at).length;
+  const badge = $('#unread');
+  badge.hidden = !unread; badge.textContent = unread;
+  document.title = unread ? `(${unread}) 信箋與漂流瓶` : '信箋與漂流瓶';
+  setAppBadge(unread);
+}
+
+// App 圖示上的未讀數字（Android、電腦、iPhone 主畫面 App 支援）
+function setAppBadge(n) {
+  try { (n ? navigator.setAppBadge?.(n) : navigator.clearAppBadge?.())?.catch?.(() => {}); } catch {}
+}
+
+// ---------- 通知 ----------
+// Realtime 和推播可能同時送到同一則通知，用 type+id 去重
+const seenEvents = new Set();
+async function onNotify(ev) {
+  const key = ev.type + ':' + (ev.id ?? '');
+  if (ev.id != null) { if (seenEvents.has(key)) return; seenEvents.add(key); setTimeout(() => seenEvents.delete(key), 30000); }
+  const msg = ev.type === 'bottle_picked' ? '你的漂流瓶被陌生人撿到了 🍾'
+    : ev.kind === 'bottle' ? '海上的陌生人回信了 🍾' : '收到一封新信 💌';
+  toast(msg);
+  await loadMail();
+  // 只重畫列表；寫信、讀信畫面不動，避免打到一半的字不見
+  if (state.view === 'inbox' || state.view === 'sent') render();
+  systemNotify(msg, ev.type === 'bottle_picked' ? 'sent' : 'inbox');
+}
+
+// 分頁在背景、又沒有推播時，由頁面自己跳系統通知（示範模式或沒設定 VAPID 時）
+function systemNotify(msg, view) {
+  if (pushOn || !('Notification' in window) || Notification.permission !== 'granted' || !document.hidden) return;
+  const opts = { body: msg, icon: 'icons/icon-192.png', badge: 'icons/badge-72.png', tag: 'letters-' + Date.now(), data: { url: './?view=' + view } };
+  if (swReg) { swReg.showNotification('信箋與漂流瓶', opts).catch(() => {}); return; }
+  try {
+    const n = new Notification('信箋與漂流瓶', opts);
+    n.onclick = () => { window.focus(); go(view); n.close(); };
+  } catch {}
+}
+
+// =========================================================
+// 網頁 App（PWA）：Service Worker、安裝、推播
+// =========================================================
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isStandalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+let swReg = null;      // Service Worker 註冊結果
+let pushOn = false;    // 這台裝置的推播是否已經開好
+let installEvent = null;
+
+async function registerSW() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    swReg = await navigator.serviceWorker.register('./sw.js');
+    navigator.serviceWorker.addEventListener('message', e => {
+      if (e.data?.type === 'open') openFromUrl(e.data.url);
+      if (e.data?.type === 'push' && e.data.data) onNotify(e.data.data);
+    });
+  } catch (e) { console.warn('Service Worker 註冊失敗（要用 https 或 localhost 開啟）', e); }
+}
+
+const pushSupported = () => !DEMO && !!VAPID_PUBLIC_KEY && !!swReg && 'PushManager' in window && 'Notification' in window;
+
+function b64ToBytes(b64) {
+  const pad = '='.repeat((4 - b64.length % 4) % 4);
+  const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(raw, c => c.charCodeAt(0));
+}
+
+// 取得（或建立）這台裝置的推播訂閱，存到 Supabase
+async function ensurePushSubscription() {
+  const opts = { userVisibleOnly: true, applicationServerKey: b64ToBytes(VAPID_PUBLIC_KEY) };
+  let sub = await swReg.pushManager.getSubscription();
+  if (!sub) {
+    try { sub = await swReg.pushManager.subscribe(opts); }
+    catch (e) {
+      // 換過 VAPID 金鑰時，舊訂閱要先取消
+      const old = await swReg.pushManager.getSubscription();
+      if (!old) throw e;
+      await old.unsubscribe(); sub = await swReg.pushManager.subscribe(opts);
+    }
+  }
+  await api.savePush(sub.toJSON());
+  pushOn = true;
+}
+
+// 使用者按「開啟通知」（一定要由點擊觸發，iPhone 才會跳出詢問）
+async function enablePush() {
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') throw new Error('通知被封鎖了，可以到瀏覽器或手機的設定裡打開');
+  await ensurePushSubscription();
+}
+
+// 登入後自動確認：之前允許過就直接接上，不再詢問
+async function syncPush() {
+  if (!pushSupported() || Notification.permission !== 'granted') return;
+  try { await ensurePushSubscription(); } catch (e) { console.warn('推播訂閱失敗', e); }
+}
+
+async function disablePushForThisDevice() {
+  if (!swReg || !pushOn) return;
+  try { const sub = await swReg.pushManager.getSubscription(); if (sub) await api.deletePush(sub.endpoint); } catch {}
+  pushOn = false;
+}
+
+function setupBell() {
+  const bell = $('#bell');
+  bell.hidden = true;
+  // iPhone 在 Safari 網頁裡不能收推播，要先加入主畫面
+  if (isIOS && !isStandalone) {
+    bell.hidden = false; bell.textContent = '🔔 通知';
+    bell.onclick = showIosGuide;
+    return;
+  }
+  if (!('Notification' in window) || Notification.permission === 'denied') return;
+  if (pushSupported()) {
+    if (Notification.permission === 'granted' && pushOn) return;
+    bell.hidden = false; bell.textContent = '🔔 開啟通知';
+    bell.onclick = () => busy(bell, async () => {
+      await enablePush(); bell.hidden = true; toast('通知開啟了！App 關掉也收得到');
+    });
+    return;
+  }
+  // 示範模式、或沒設定 VAPID：只有 App 開著（含背景分頁）時通知
+  if (Notification.permission === 'default') {
+    bell.hidden = false; bell.textContent = '🔔 開啟通知';
+    bell.onclick = async () => {
+      const p = await Notification.requestPermission();
+      bell.hidden = true;
+      toast(p === 'granted' ? '已開啟通知' : '通知被封鎖了，可以到瀏覽器的網站設定打開');
+    };
+  }
+}
+
+function showIosGuide() {
+  const ov = document.createElement('div');
+  ov.className = 'overlay';
+  ov.innerHTML = `
+    <div class="sheet" role="dialog" aria-label="加入主畫面">
+      <h2>在 iPhone 收到通知</h2>
+      <p class="muted" style="margin:0">iPhone 要先把網站加到主畫面，才能收到新信通知（需要 iOS 16.4 以上）。</p>
+      <ol>
+        <li>用 <b>Safari</b> 打開這個網站</li>
+        <li>點下方的分享按鈕 <span class="share-icon"></span></li>
+        <li>往下滑，選「<b>加入主畫面</b>」，再按「新增」</li>
+        <li>從主畫面打開「<b>信箋</b>」，登入後點右上角「🔔 開啟通知」</li>
+      </ol>
+      <button class="btn" style="width:100%;justify-content:center">知道了</button>
+    </div>`;
+  ov.onclick = e => { if (e.target === ov || e.target.tagName === 'BUTTON') ov.remove(); };
+  document.body.appendChild(ov);
+}
+
+// 第一次在 iPhone Safari 打開時，提示一次可以加入主畫面
+function maybeShowIosTip() {
+  let dismissed = false;
+  try { dismissed = localStorage.getItem('ios-tip-dismissed') === '1'; } catch {}
+  if (!isIOS || isStandalone || dismissed || $('#ios-tip')) return;
+  const tip = document.createElement('div');
+  tip.className = 'tip'; tip.id = 'ios-tip';
+  tip.innerHTML = `<span style="flex:1">📲 把「信箋」<a href="#">加入主畫面</a>，就能像 App 一樣使用，還能收到新信通知。</span><button class="x" aria-label="關閉">✕</button>`;
+  tip.querySelector('a').onclick = e => { e.preventDefault(); showIosGuide(); };
+  tip.querySelector('.x').onclick = () => { tip.remove(); try { localStorage.setItem('ios-tip-dismissed', '1'); } catch {} };
+  app.prepend(tip);
+}
+
+// Android / 電腦 Chrome：顯示「安裝」按鈕
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault(); installEvent = e;
+  if (!$('#header').hidden) $('#install').hidden = false;
+});
+window.addEventListener('appinstalled', () => { installEvent = null; $('#install').hidden = true; toast('安裝好了！'); });
+$('#install').onclick = async () => {
+  if (!installEvent) return;
+  installEvent.prompt();
+  await installEvent.userChoice.catch(() => {});
+  installEvent = null; $('#install').hidden = true;
+};
+
+// 從通知點進來：./?open=信件編號 或 ./?view=sent
+async function openFromUrl(url) {
+  const u = new URL(url, location.href);
+  const open = Number(u.searchParams.get('open'));
+  const view = u.searchParams.get('view');
+  if (u.search) history.replaceState(null, '', location.pathname);
+  if (!open && !view) return false;
+  await loadMail();
+  if (open && state.mail.some(m => m.id === open)) { state.from = 'inbox'; go('read', open); return true; }
+  if (['inbox', 'sent', 'sea', 'compose'].includes(view)) { go(view); return true; }
+  return false;
+}
+
+function render() {
+  if (state.view === 'admin' && !state.isAdmin) state.view = 'inbox';
+  ({ inbox: viewList, sent: viewList, compose: viewCompose, sea: viewSea, read: viewRead, admin: viewAdmin })[state.view]();
+}
+
+function viewList() {
+  const incoming = state.view === 'inbox';
+  const items = state.mail.filter(m => m.direction === (incoming ? 'in' : 'out'));
+  app.innerHTML = `${demoNote()}
+    <h2>${incoming ? '收件匣' : '寄件備份'}</h2>
+    ${items.length ? `<ul class="list">${items.map(m => `
+      <li class="item ${incoming && !m.read_at ? 'unread' : ''}" data-id="${m.id}">
+        <span class="icon">${letterIcon(m)}</span>
+        <div class="main">
+          <div class="from">${esc(fromName(m))}${topicTag(m)}</div>
+          <div class="subj">${esc(m.subject || '（無主旨）')} — ${esc(plainText(m.body_html).slice(0, 60))}</div>
+        </div>
+        <span class="date">${fmt(m.created_at)}</span>
+      </li>`).join('')}</ul>`
+      : `<div class="empty-state">${incoming ? '還沒有信。寫封信給朋友，或去海邊撿個瓶子吧 🌊' : '還沒寄出任何信'}</div>`}`;
+  app.querySelectorAll('.item').forEach(li => li.onclick = () => { state.from = state.view; go('read', Number(li.dataset.id)); });
+}
+
+function viewCompose() {
+  app.innerHTML = `${demoNote()}
+    <div class="card">
+      <h2>寫一封信</h2>
+      <label for="to">收件人暱稱</label>
+      <input type="text" id="to" maxlength="20" placeholder="${DEMO ? '例如：小明' : '對方的暱稱'}" autocomplete="off">
+      <label for="subj">主旨</label>
+      <input type="text" id="subj" maxlength="100" placeholder="（可不填）">
+      <label>內容</label>
+      <div id="ed"></div>
+      <div class="error" id="err"></div>
+      <div class="row"><button class="btn" id="send">寄出 ✉️</button></div>
+    </div>`;
+  const ed = createEditor($('#ed'));
+  $('#send').onclick = async () => {
+    const to = $('#to').value.trim();
+    if (!to) return ($('#err').textContent = '請填收件人暱稱');
+    if (ed.isEmpty()) return ($('#err').textContent = '信件內容不能是空的');
+    await busy($('#send'), async () => {
+      await api.send(to, $('#subj').value, ed.getHTML());
+      toast('信寄出去了！'); await loadMail(); go('sent');
+    }, $('#err'));
+  };
+}
+
+// 主題按鈕：第一個是「不限」
+function topicChips(topics, selected, withCount) {
+  return [{ id: null, emoji: '🌊', name: '不限' }, ...topics].map(t => `
+    <button type="button" class="chip ${t.id === selected ? 'on' : ''}" data-id="${t.id ?? ''}">
+      ${esc(t.emoji)} ${esc(t.name)}${withCount && t.id != null ? `<span class="n">${t.floating_count}</span>` : ''}
+    </button>`).join('');
+}
+const chipId = btn => btn.dataset.id === '' ? null : Number(btn.dataset.id);
+
+async function viewSea() {
+  app.innerHTML = `${demoNote()}
+    <div class="card sea">
+      <h2>🌊 撿一個漂流瓶</h2>
+      <p class="muted" style="margin:0">選一個主題，從海上撿起一位陌生人的信。雙方都不會知道對方是誰。</p>
+      <div class="chips" id="pick-topics"></div>
+      <div class="error" id="perr"></div>
+      <div class="row"><button class="btn" id="pick">撿瓶子 🍾</button></div>
+    </div>
+    <div class="card">
+      <h2>丟一個漂流瓶</h2>
+      <p class="muted" style="margin:0 0 6px">寫下想說的話，它會漂給一位陌生人。每天最多丟 5 個。</p>
+      <label>主題</label>
+      <div class="chips" id="throw-topics" style="margin-top:0"></div>
+      <div class="topic-desc" id="throw-desc"></div>
+      <label for="bsubj">主旨</label>
+      <input type="text" id="bsubj" maxlength="100" placeholder="（可不填）">
+      <label>內容</label>
+      <div id="ed"></div>
+      <div class="error" id="err"></div>
+      <div class="row"><button class="btn" id="throw">丟進海裡</button></div>
+    </div>`;
+  const ed = createEditor($('#ed'), { placeholder: '給不知道是誰的你……' });
+  let topics = [];
+
+  function paint() {
+    if (!topics.some(t => t.id === state.pickTopic)) state.pickTopic = null;
+    if (!topics.some(t => t.id === state.throwTopic)) state.throwTopic = null;
+    $('#pick-topics').innerHTML = topicChips(topics, state.pickTopic, true);
+    $('#throw-topics').innerHTML = topicChips(topics, state.throwTopic, false);
+    const tt = topics.find(t => t.id === state.throwTopic);
+    $('#throw-desc').textContent = tt ? (tt.description || '') : '不指定主題：撿瓶子時選「不限」的人可能會撿到';
+    const pt = topics.find(t => t.id === state.pickTopic);
+    $('#pick').textContent = pt ? `撿一個「${pt.name}」的瓶子 🍾` : '撿瓶子 🍾';
+  }
+  async function loadTopics() {
+    // 管理者會拿到停用的主題，這裡只顯示啟用中的
+    try { topics = (await api.listTopics() || []).filter(t => t.is_active); } catch (e) { $('#perr').textContent = e.message; }
+    if (state.view === 'sea' && $('#pick-topics')) paint();
+  }
+
+  $('#pick-topics').onclick = e => { const b = e.target.closest('.chip'); if (b) { state.pickTopic = chipId(b); $('#perr').textContent = ''; paint(); } };
+  $('#throw-topics').onclick = e => { const b = e.target.closest('.chip'); if (b) { state.throwTopic = chipId(b); paint(); } };
+
+  $('#pick').onclick = () => busy($('#pick'), async () => {
+    const id = await api.pickBottle(state.pickTopic);
+    if (!id) {
+      const pt = topics.find(t => t.id === state.pickTopic);
+      $('#perr').textContent = pt ? `「${pt.name}」暫時沒有瓶子，換個主題或晚點再來看看` : '海面上暫時沒有瓶子，晚點再來看看';
+      return;
+    }
+    await loadMail(); state.from = 'inbox'; go('read', id);
+  }, $('#perr'));
+  $('#throw').onclick = async () => {
+    if (ed.isEmpty()) return ($('#err').textContent = '瓶子裡至少要放幾個字');
+    await busy($('#throw'), async () => {
+      await api.throwBottle($('#bsubj').value, ed.getHTML(), state.throwTopic);
+      toast('瓶子漂走了 🌊'); ed.clear(); $('#bsubj').value = ''; await loadMail();
+    }, $('#err'));
+  };
+
+  paint();
+  await loadTopics();
+}
+
+// =========================================================
+// 管理頁：主題、管理者
+// =========================================================
+async function viewAdmin() {
+  app.innerHTML = `
+    ${DEMO ? '<div class="demo-note">示範模式中你就是管理者，可以直接試用。改動只存在這個瀏覽器。</div>' : ''}
+    <div class="card" id="tform">
+      <h2 id="tform-title">新增主題</h2>
+      <div class="form-grid">
+        <div><label for="t-emoji">圖示</label><input type="text" id="t-emoji" maxlength="8" placeholder="🌊"></div>
+        <div><label for="t-name">名稱（最多 20 字）</label><input type="text" id="t-name" maxlength="20" placeholder="例如：旅行"></div>
+      </div>
+      <label for="t-desc">說明（最多 100 字，可不填）</label>
+      <input type="text" id="t-desc" maxlength="100" placeholder="例如：去過、想去的地方">
+      <div class="error" id="terr"></div>
+      <div class="row"><button class="btn" id="t-save">新增主題</button><button class="btn ghost" id="t-cancel" hidden>取消</button></div>
+    </div>
+    <div class="card">
+      <h2>主題列表</h2>
+      <p class="muted" style="margin:0 0 4px">「停用」會先藏起來，之後可以再打開；「刪除」無法復原，已經丟出的瓶子會變成「不限」主題。</p>
+      <div id="tlist" class="muted">載入中…</div>
+    </div>
+    <div class="card">
+      <h2>管理者</h2>
+      <div id="alist" class="muted">載入中…</div>
+      <label for="a-nick">新增管理者（輸入對方的暱稱）</label>
+      <div class="row" style="margin-top:0">
+        <input type="text" id="a-nick" maxlength="20" style="flex:1;min-width:0" autocomplete="off">
+        <button class="btn" id="a-add">新增</button>
+      </div>
+      <div class="error" id="aerr"></div>
+    </div>`;
+
+  let topics = [];
+  let editing = null;
+
+  const resetForm = () => {
+    editing = null;
+    $('#t-emoji').value = ''; $('#t-name').value = ''; $('#t-desc').value = ''; $('#terr').textContent = '';
+    $('#tform-title').textContent = '新增主題'; $('#t-save').textContent = '新增主題'; $('#t-cancel').hidden = true;
+  };
+
+  async function loadTopics() {
+    try { topics = await api.listTopics() || []; }
+    catch (e) { if ($('#tlist')) $('#tlist').textContent = e.message; return; }
+    const box = $('#tlist'); if (!box) return;
+    box.className = '';
+    box.innerHTML = topics.length ? topics.map((t, i) => `
+      <div class="trow ${t.is_active ? '' : 'off'}" data-id="${t.id}">
+        <span class="emo">${esc(t.emoji)}</span>
+        <div class="info">
+          <div class="nm">${esc(t.name)}${t.is_active ? '' : '<span class="pill">已停用</span>'}</div>
+          <div class="ds">${t.description ? esc(t.description) + '・' : ''}海上 ${t.floating_count} 個瓶子</div>
+        </div>
+        <div class="actions">
+          <button class="icon-btn" data-act="up" ${i === 0 ? 'disabled' : ''} aria-label="往上移">↑</button>
+          <button class="icon-btn" data-act="down" ${i === topics.length - 1 ? 'disabled' : ''} aria-label="往下移">↓</button>
+          <button class="icon-btn" data-act="edit">編輯</button>
+          <button class="icon-btn" data-act="toggle">${t.is_active ? '停用' : '啟用'}</button>
+          <button class="icon-btn danger" data-act="del">刪除</button>
+        </div>
+      </div>`).join('') : '<p class="muted" style="margin:8px 0 0">還沒有主題，用上面的表單新增第一個吧。</p>';
+  }
+
+  async function loadAdmins() {
+    let admins = [];
+    try { admins = await api.listAdmins() || []; }
+    catch (e) { if ($('#alist')) $('#alist').textContent = e.message; return; }
+    const box = $('#alist'); if (!box) return;
+    box.className = '';
+    box.innerHTML = admins.map(a => `
+      <div class="trow">
+        <span class="emo">👤</span>
+        <div class="info"><div class="nm">${esc(a.nickname)}${a.is_me ? '<span class="pill">你</span>' : ''}</div></div>
+        <div class="actions"><button class="icon-btn danger" data-nick="${esc(a.nickname)}" ${admins.length <= 1 ? 'disabled' : ''}>移除</button></div>
+      </div>`).join('');
+  }
+
+  $('#tlist').onclick = e => {
+    const b = e.target.closest('button[data-act]'); if (!b) return;
+    const id = Number(b.closest('.trow').dataset.id);
+    const t = topics.find(x => x.id === id); if (!t) return;
+    const act = b.dataset.act;
+    if (act === 'edit') {
+      editing = t;
+      $('#t-emoji').value = t.emoji; $('#t-name').value = t.name; $('#t-desc').value = t.description || '';
+      $('#tform-title').textContent = `編輯「${t.name}」`; $('#t-save').textContent = '儲存'; $('#t-cancel').hidden = false;
+      $('#tform').scrollIntoView({ behavior: 'smooth' }); $('#t-name').focus();
+      return;
+    }
+    busy(b, async () => {
+      if (act === 'up' || act === 'down') await api.moveTopic(id, act === 'up' ? -1 : 1);
+      if (act === 'toggle') {
+        await api.saveTopic({ ...t, is_active: !t.is_active });
+        toast(t.is_active ? `已停用「${t.name}」` : `已啟用「${t.name}」`);
+      }
+      if (act === 'del') {
+        if (!confirm(`確定刪除「${t.name}」？\n\n已經丟出的瓶子會保留，但會變成「不限」主題。這個動作無法復原。\n（只想暫時藏起來的話，可以用「停用」）`)) return;
+        await api.deleteTopic(id);
+        if (editing?.id === id) resetForm();
+        toast(`已刪除「${t.name}」`);
+      }
+      await loadTopics();
+    }, $('#terr'));
+  };
+
+  $('#t-save').onclick = () => busy($('#t-save'), async () => {
+    const name = $('#t-name').value.trim();
+    if (!name) throw new Error('請填主題名稱');
+    await api.saveTopic({
+      id: editing?.id ?? null,
+      emoji: $('#t-emoji').value.trim() || '🌊',
+      name,
+      description: $('#t-desc').value.trim(),
+      is_active: editing ? editing.is_active : true,
+    });
+    toast(editing ? '已儲存' : `已新增「${name}」`);
+    resetForm();
+    await loadTopics();
+  }, $('#terr'));
+  $('#t-cancel').onclick = resetForm;
+
+  $('#a-add').onclick = () => busy($('#a-add'), async () => {
+    const n = $('#a-nick').value.trim();
+    if (!n) throw new Error('請輸入暱稱');
+    await api.addAdmin(n);
+    $('#a-nick').value = ''; toast(`「${n}」現在是管理者了`);
+    await loadAdmins();
+  }, $('#aerr'));
+
+  $('#alist').onclick = e => {
+    const b = e.target.closest('button[data-nick]'); if (!b) return;
+    const n = b.dataset.nick;
+    const isMe = n === state.nickname;
+    if (!confirm(isMe ? '確定移除自己的管理者身分？移除後就看不到管理頁了。' : `確定移除「${n}」的管理者身分？`)) return;
+    busy(b, async () => {
+      await api.removeAdmin(n);
+      toast('已移除');
+      if (isMe) { state.isAdmin = false; $('#nav-admin').hidden = true; go('inbox'); return; }
+      await loadAdmins();
+    }, $('#aerr'));
+  };
+
+  await Promise.all([loadTopics(), loadAdmins()]);
+}
+
+function viewRead() {
+  const m = state.mail.find(x => x.id === state.openId);
+  if (!m) return go('inbox');
+  const parent = m.reply_to && state.mail.find(x => x.id === m.reply_to);
+  app.innerHTML = `
+    <div class="row" style="margin:0 0 12px"><button class="btn ghost" id="back">← 返回</button></div>
+    <article class="letter">
+      <div class="letter-head">
+        <div class="subj">${letterIcon(m)} ${esc(m.subject || '（無主旨）')}</div>
+        <div class="muted">${m.direction === 'in' ? '來自 ' : ''}${esc(fromName(m))}・${fmt(m.created_at)}${topicTag(m)}</div>
+        ${parent ? `<div class="muted">↪ 回覆：<a href="#" id="parent">${esc(parent.subject || '（無主旨）')}</a></div>` : ''}
+      </div>
+      <div class="letter-body">${sanitize(m.body_html)}</div>
+    </article>
+    ${m.direction === 'in' ? `
+    <div class="card">
+      <h2>回信</h2>
+      <div id="ed"></div>
+      <div class="error" id="err"></div>
+      <div class="row">
+        <button class="btn" id="reply">寄出回信</button>
+        <span style="flex:1"></span>
+        <button class="btn danger" id="report">檢舉</button>
+        <button class="btn danger" id="block">封鎖對方</button>
+      </div>
+    </div>` : ''}`;
+  $('#back').onclick = () => go(state.from || 'inbox');
+  if (parent) $('#parent').onclick = e => { e.preventDefault(); go('read', parent.id); };
+  if (m.direction !== 'in') return;
+
+  if (!m.read_at) { m.read_at = Date.now(); api.markRead(m.id).then(loadMail); }
+  const ed = createEditor($('#ed'), { placeholder: '寫點什麼回覆對方……' });
+  $('#reply').onclick = async () => {
+    if (ed.isEmpty()) return ($('#err').textContent = '回信內容不能是空的');
+    await busy($('#reply'), async () => {
+      await api.reply(m.id, ed.getHTML());
+      toast('回信寄出了！'); await loadMail(); go('sent');
+    }, $('#err'));
+  };
+  $('#block').onclick = () => busy($('#block'), async () => {
+    if (!confirm('封鎖之後，你們就不會再收到彼此的信，也撿不到對方的瓶子。確定嗎？')) return;
+    await api.block(m.id); toast('已封鎖'); await loadMail(); go('inbox');
+  }, $('#err'));
+  $('#report').onclick = () => busy($('#report'), async () => {
+    const reason = prompt('請簡單說明檢舉原因（例如騷擾、廣告）：');
+    if (reason === null) return;
+    await api.report(m.id, reason); toast('已收到檢舉，謝謝你');
+  }, $('#err'));
+}
+
+async function busy(btn, fn, errEl) {
+  if (errEl) errEl.textContent = '';
+  btn.disabled = true;
+  try { await fn(); } catch (e) { if (errEl) errEl.textContent = e.message; else toast(e.message); }
+  finally { btn.disabled = false; }
+}
+
+// ---------- 登入與暱稱 ----------
+function viewAuth() {
+  $('#header').hidden = true;
+  app.innerHTML = `
+    <div style="text-align:center;margin:32px 0 20px">
+      <div style="font-size:3rem">✉️🍾</div>
+      <h1>信箋與漂流瓶</h1>
+      <p class="muted">寫信給朋友，或把心事交給大海。</p>
+    </div>
+    ${demoNote()}
+    <div class="card" style="max-width:420px;margin:0 auto">
+      ${DEMO ? `<button class="btn" id="enter" style="width:100%;justify-content:center">進入示範</button>` : `
+      <label for="email">Email</label><input type="email" id="email" autocomplete="email">
+      <label for="pw">密碼（至少 6 碼）</label><input type="password" id="pw" autocomplete="current-password">
+      <div class="error" id="err"></div>
+      <div class="row"><button class="btn" id="in">登入</button><button class="btn ghost" id="up">註冊</button></div>`}
+    </div>`;
+  maybeShowIosTip();
+  if (DEMO) { $('#enter').onclick = async () => { await api.signIn(); start(); }; return; }
+  const creds = () => [$('#email').value.trim(), $('#pw').value];
+  $('#in').onclick = () => busy($('#in'), async () => { await api.signIn(...creds()); start(); }, $('#err'));
+  $('#up').onclick = () => busy($('#up'), async () => { await api.signUp(...creds()); start(); }, $('#err'));
+}
+
+function viewNickname() {
+  $('#header').hidden = true;
+  app.innerHTML = `
+    <div class="card" style="max-width:420px;margin:40px auto">
+      <h2>取一個暱稱</h2>
+      <p class="muted" style="margin:0">朋友用暱稱寫信給你。漂流瓶不會顯示暱稱。</p>
+      <label for="nick">暱稱（2–20 字）</label>
+      <input type="text" id="nick" maxlength="20">
+      <div class="error" id="err"></div>
+      <div class="row"><button class="btn" id="ok">開始</button></div>
+    </div>`;
+  $('#ok').onclick = () => busy($('#ok'), async () => {
+    const n = $('#nick').value.trim();
+    if (n.length < 2) throw new Error('暱稱至少 2 個字');
+    await api.createProfile(n); start();
+  }, $('#err'));
+}
+
+async function start() {
+  const s = await api.session();
+  if (!s) return viewAuth();
+  const p = await api.getProfile();
+  if (!p) return viewNickname();
+  state.nickname = p.nickname;
+  $('#who').textContent = p.nickname;
+  $('#header').hidden = false;
+  $('#install').hidden = !installEvent;
+  state.isAdmin = await api.isAdmin().catch(() => false);
+  $('#nav-admin').hidden = !state.isAdmin;
+  setupBell();
+  await loadMail();
+  if (!(await openFromUrl(location.href))) go('inbox');
+  api.subscribe(onNotify).catch(e => console.warn('通知無法啟用', e));
+  syncPush().then(setupBell);
+}
+
+$('#nav').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { if (b.dataset.view === 'inbox' || b.dataset.view === 'sent') loadMail().then(() => go(b.dataset.view)); else go(b.dataset.view); } });
+$('#logout').onclick = async () => {
+  await disablePushForThisDevice();   // 登出後這台裝置就不再收到這個帳號的通知
+  await api.unsubscribe(); await api.signOut();
+  document.title = '信箋與漂流瓶'; setAppBadge(0); $('#install').hidden = true;
+  state.isAdmin = false; $('#nav-admin').hidden = true;
+  start();
+};
+// 回到分頁時補抓一次，避免離線期間漏掉通知
+document.addEventListener('visibilitychange', async () => {
+  if (document.hidden || !api || $('#header').hidden) return;
+  await loadMail();
+  if (state.view === 'inbox' || state.view === 'sent') render();
+});
+
+try {
+  await registerSW();
+  api = DEMO ? makeDemoApi() : await makeSupabaseApi();
+  await start();
+} catch (e) {
+  app.innerHTML = `<div class="card"><h2>無法啟動</h2><p class="error">${esc(e.message)}</p></div>`;
+}
+</script>
+</body>
+</html>
