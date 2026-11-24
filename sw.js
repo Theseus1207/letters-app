@@ -2,7 +2,7 @@
 // Service Worker：離線快取 + 背景推播
 // 改了網站檔案後，把 CACHE 的版本號 +1，使用者下次打開就會更新
 // =========================================================
-const CACHE = 'letters-v3';
+const CACHE = 'letters-v5';
 const SHELL = [
   './',
   './index.html',
@@ -48,11 +48,15 @@ self.addEventListener('push', event => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch {}
 
-  event.waitUntil((async () => {
-    // App 圖示上的未讀數字（支援的平台才有）
-    if (typeof data.unread === 'number' && self.navigator.setAppBadge) {
-      try { data.unread > 0 ? await self.navigator.setAppBadge(data.unread) : await self.navigator.clearAppBadge(); } catch {}
-    }
+  // App 圖示上的未讀數字（支援的平台才有）。獨立出來，就算這步卡住／失敗，
+  // 也不會連累下面「顯示橫幅通知」一起卡住——這兩件事互不影響。
+  const updateBadge = (async () => {
+    if (typeof data.unread !== 'number' || !self.navigator.setAppBadge) return;
+    try { data.unread > 0 ? await self.navigator.setAppBadge(data.unread) : await self.navigator.clearAppBadge(); }
+    catch (e) { console.error('更新角標失敗', e); }
+  })();
+
+  const showBanner = (async () => {
     // 使用者正盯著 App 時，交給頁面內的提示就好，不重複跳系統通知
     const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     const watching = wins.some(w => w.visibilityState === 'visible' && w.focused);
@@ -60,15 +64,26 @@ self.addEventListener('push', event => {
       wins.forEach(w => w.postMessage({ type: 'push', data }));
       return;
     }
-    await self.registration.showNotification(data.title || '信箋與漂流瓶', {
+    const opts = {
       body: data.body || '你有新的信',
       icon: './icons/icon-192.png',
       badge: './icons/badge-72.png',
       tag: data.tag || 'letters',
       renotify: true,
       data: { url: data.url || './' },
-    });
-  })());
+    };
+    try {
+      await self.registration.showNotification(data.title || '信箋與漂流瓶', opts);
+    } catch (e) {
+      // 原本的設定（圖示路徑、tag 等）某個欄位讓系統拒絕顯示；
+      // 退回最簡單的版本再試一次，至少讓橫幅/鎖定畫面通知能出現
+      console.error('showNotification 失敗，改用最簡版本重試', e);
+      try { await self.registration.showNotification(data.title || '信箋與漂流瓶', { body: opts.body }); }
+      catch (e2) { console.error('showNotification 重試仍失敗', e2); }
+    }
+  })();
+
+  event.waitUntil(Promise.allSettled([updateBadge, showBanner]));
 });
 
 // 點通知：已經開著就切過去並打開那封信，沒開就開新視窗
