@@ -2,7 +2,7 @@
 // Service Worker：離線快取 + 背景推播
 // 改了網站檔案後，把 CACHE 的版本號 +1，使用者下次打開就會更新
 // =========================================================
-const CACHE = 'letters-v2';
+const CACHE = 'letters-v3';
 const SHELL = [
   './',
   './index.html',

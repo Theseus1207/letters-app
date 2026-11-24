@@ -168,6 +168,28 @@
   .icon-btn.danger { color: var(--danger); }
   .form-grid { display: grid; grid-template-columns: 72px 1fr; gap: 8px; }
   @media (max-width: 480px) { .trow .actions { width: 100%; padding-left: 40px; } }
+  /* ---------- 展信、丟瓶子的小動畫 ---------- */
+  @keyframes letterIn { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }
+  .letter { animation: letterIn .35s ease-out; }
+  .anim-overlay {
+    position: fixed; inset: 0; z-index: 25; display: flex; align-items: center; justify-content: center;
+    pointer-events: none;
+  }
+  .anim-overlay .glyph { font-size: 4.2rem; filter: drop-shadow(0 6px 10px #0003); }
+  @keyframes envOpen {
+    0%   { transform: scale(.6) rotate(-8deg); opacity: 0; }
+    55%  { transform: scale(1.18) rotate(4deg); opacity: 1; }
+    100% { transform: scale(1) rotate(0deg); opacity: 1; }
+  }
+  .anim-overlay.env .glyph { animation: envOpen .5s cubic-bezier(.34,1.56,.64,1) both; }
+  @keyframes bottleDrift {
+    0%   { transform: translate(0,0) scale(1) rotate(-6deg); opacity: 1; }
+    100% { transform: translate(120px, 170px) scale(.4) rotate(30deg); opacity: 0; }
+  }
+  .anim-overlay.bottle .glyph { animation: bottleDrift .9s ease-in both; }
+  @media (prefers-reduced-motion: reduce) {
+    .letter, .anim-overlay .glyph { animation: none !important; }
+  }
   .toast {
     position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #2f2a24; color: #fff;
     padding: 10px 18px; border-radius: 999px; font-size: .9rem; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 20;
@@ -200,11 +222,11 @@
 // 設定：填入 Supabase 專案的 URL 與 anon（publishable）key
 // 兩個都留空 → 示範模式（資料只存在這個瀏覽器）
 // =========================================================
-const SUPABASE_URL = 'https://jujfioohhyweddfaxtjc.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_Jx9FjkC-RjZjQO2IDJdGlw_ndWf5EEL';
+const SUPABASE_URL = '';
+const SUPABASE_ANON_KEY = '';
 // 推播用的 VAPID 公鑰（npx web-push generate-vapid-keys 產生的 Public Key）
 // 留空 → 只有 App 開著時的即時通知，沒有背景推播
-const VAPID_PUBLIC_KEY = 'BBnmF6goI-aw-l4Ji2mMsM6iu-RvZBZPmXEC0lH1qUhnukGq4MzH3b01eLl6RpGfbrZnW0VH9ZpNMc2hj9HeQrk';
+const VAPID_PUBLIC_KEY = '';
 const DEMO = !SUPABASE_URL || !SUPABASE_ANON_KEY;
 
 const MAX_HTML = 20000;
@@ -391,7 +413,14 @@ async function makeSupabaseApi() {
       channel = sb.channel('inbox:' + data.session.user.id, { config: { private: true } })
         .on('broadcast', { event: 'new_letter' }, m => handler({ type: 'new_letter', ...(m.payload || {}) }))
         .on('broadcast', { event: 'bottle_picked' }, m => handler({ type: 'bottle_picked', ...(m.payload || {}) }))
-        .subscribe((status, err) => { if (status === 'CHANNEL_ERROR') console.warn('通知連線失敗', err); });
+        .subscribe((status, err) => {
+          // 手機把分頁丟到背景一陣子後，這條連線常常會斷掉又不會自己接回來
+          // 斷線時把 channel 清空，下次呼叫 subscribe() 就會重新建立一條新的
+          if (status === 'CHANNEL_ERROR' || status === 'CLOSED' || status === 'TIMED_OUT') {
+            console.warn('通知連線中斷，下次回到畫面時會自動重連', status, err);
+            if (channel) { sb.removeChannel(channel).catch(() => {}); channel = null; }
+          }
+        });
     },
     async unsubscribe() { if (channel) { await sb.removeChannel(channel); channel = null; } },
     savePush: sub => rpc('save_push_subscription', { p_endpoint: sub.endpoint, p_p256dh: sub.keys.p256dh, p_auth: sub.keys.auth }),
@@ -827,7 +856,12 @@ function viewList() {
         <span class="date">${fmt(m.created_at)}</span>
       </li>`).join('')}</ul>`
       : `<div class="empty-state">${incoming ? '還沒有信。寫封信給朋友，或去海邊撿個瓶子吧 🌊' : '還沒寄出任何信'}</div>`}`;
-  app.querySelectorAll('.item').forEach(li => li.onclick = () => { state.from = state.view; go('read', Number(li.dataset.id)); });
+  app.querySelectorAll('.item').forEach((li, i) => li.onclick = async () => {
+    state.from = state.view;
+    const id = Number(li.dataset.id);
+    await playGlyphAnim('env', letterIcon(items[i]), 480);
+    go('read', id);
+  });
 }
 
 function viewCompose() {
@@ -915,12 +949,15 @@ async function viewSea() {
       $('#perr').textContent = pt ? `「${pt.name}」暫時沒有瓶子，換個主題或晚點再來看看` : '海面上暫時沒有瓶子，晚點再來看看';
       return;
     }
-    await loadMail(); state.from = 'inbox'; go('read', id);
+    await loadMail(); state.from = 'inbox';
+    await playGlyphAnim('env', '🍾', 480);
+    go('read', id);
   }, $('#perr'));
   $('#throw').onclick = async () => {
     if (ed.isEmpty()) return ($('#err').textContent = '瓶子裡至少要放幾個字');
     await busy($('#throw'), async () => {
       await api.throwBottle($('#bsubj').value, ed.getHTML(), state.throwTopic);
+      playGlyphAnim('bottle', '🍾', 900);   // 不用等它播完，讓畫面立刻恢復可以操作
       toast('瓶子漂走了 🌊'); ed.clear(); $('#bsubj').value = ''; await loadMail();
     }, $('#err'));
   };
@@ -1125,6 +1162,19 @@ function viewRead() {
   }, $('#err'));
 }
 
+// 展信、丟瓶子前的小動畫；手機設定「減少動態效果」的人會直接跳過
+function prefersReducedMotion() { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } }
+function playGlyphAnim(cls, glyph, duration) {
+  return new Promise(resolve => {
+    if (prefersReducedMotion()) return resolve();
+    const ov = document.createElement('div');
+    ov.className = 'anim-overlay ' + cls;
+    ov.innerHTML = `<span class="glyph">${glyph}</span>`;
+    document.body.appendChild(ov);
+    setTimeout(() => { ov.remove(); resolve(); }, duration);
+  });
+}
+
 async function busy(btn, fn, errEl) {
   if (errEl) errEl.textContent = '';
   btn.disabled = true;
@@ -1205,6 +1255,8 @@ document.addEventListener('visibilitychange', async () => {
   if (document.hidden || !api || $('#header').hidden) return;
   await loadMail();
   if (state.view === 'inbox' || state.view === 'sent') render();
+  // 即時通知的連線在背景常會斷掉，回到畫面時順便接回去（channel 還活著的話這裡不會做任何事）
+  api.subscribe(onNotify).catch(e => console.warn('通知無法啟用', e));
 });
 
 try {
