@@ -150,6 +150,25 @@
   }
   .topic-desc { font-size: .85rem; color: var(--muted); min-height: 1.3em; margin-top: 6px; }
 
+  /* ---------- 隱藏／刪除、多選 ---------- */
+  .list-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .list-head h2 { margin: 0; flex: 1; min-width: 0; }
+  .list-tools { display: flex; gap: 6px; flex-shrink: 0; }
+  .check {
+    width: 22px; height: 22px; border-radius: 50%; border: 2px solid #cdbfa6; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center; color: #fff; font-size: .8rem;
+  }
+  .check.on { background: var(--accent); border-color: var(--accent); }
+  .check.on::after { content: "✓"; }
+  .item.picked { border-color: var(--accent); background: var(--accent-soft); }
+  .sel-bar {
+    position: sticky; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 6; margin-top: 10px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 12px;
+    background: #fff; border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 4px 14px #0002;
+  }
+  .sel-bar .btn { padding: 6px 12px; font-size: .9rem; }
+  .read-tools { display: flex; align-items: center; gap: 6px; margin: 0 0 12px; }
+  .read-tools .btn { padding: 6px 12px; font-size: .9rem; }
   /* ---------- 管理頁 ---------- */
   .trow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--border); }
   .trow:last-child { border-bottom: 0; }
@@ -169,8 +188,59 @@
   .form-grid { display: grid; grid-template-columns: 72px 1fr; gap: 8px; }
   @media (max-width: 480px) { .trow .actions { width: 100%; padding-left: 40px; } }
   /* ---------- 展信、丟瓶子的小動畫 ---------- */
-  @keyframes letterIn { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }
-  .letter { animation: letterIn .35s ease-out; }
+  /* 展信：原本的信紙，沿對角線展開 */
+  .scroll { position: relative; margin: 12px 0 16px; }
+  .scroll .scroll-paper.letter, .scroll .editor { margin: 0; }
+  .roll-clip { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 3; border-radius: 10px; }
+  .roll {
+    position: absolute; left: 0; top: 0; border-radius: 999px; transform-origin: center;
+    background: linear-gradient(#d9cfbd, #fffdf8 40%, #f4eee2 60%, #c9bba1);
+    box-shadow: 0 4px 8px #2f2a2433;
+  }
+  /* ---------- 丟漂流瓶的場景（簡約 icon 風） ---------- */
+  .bottle-scene { position: fixed; inset: 0; z-index: 40; cursor: pointer; animation: bsFade 4.4s ease both; }
+  .bottle-scene svg { width: 100%; height: 100%; display: block; }
+  .bottle-scene .skip { position: absolute; bottom: calc(18px + env(safe-area-inset-bottom)); left: 0; right: 0; text-align: center;
+    font-size: .8rem; color: #ffffffcc; letter-spacing: .1em; animation: bsSkip 4.4s ease both; }
+  @keyframes bsFade  { 0% { opacity: 0 } 5% { opacity: 1 } 92% { opacity: 1 } 100% { opacity: 0 } }
+  @keyframes bsSkip  { 0%, 55% { opacity: 0 } 65%, 100% { opacity: 1 } }
+  .bs-sea { animation: bsSea 4.4s ease both; }
+  @keyframes bsSea   { 0%, 52% { opacity: 0 } 64%, 100% { opacity: 1 } }
+  /* 羊皮紙由下往上捲起 */
+  .bs-sheet { transform-box: fill-box; transform-origin: top center; animation: bsSheet 4.4s ease-in-out both; }
+  @keyframes bsSheet { 0%, 4.5% { transform: scaleY(1); opacity: 1 } 24% { transform: scaleY(.04); opacity: 1 } 25%, 100% { transform: scaleY(0); opacity: 0 } }
+  /* 捲好的紙：跟著捲到上方 → 轉直縮小 → 掉進瓶子 */
+  .bs-scroll { animation: bsScroll 4.4s ease-in-out both; }
+  @keyframes bsScroll {
+    0%, 4.5% { transform: translate(100px, 190px) rotate(0deg) scale(1, .6); opacity: 0 }
+    6%       { opacity: 1 }
+    25%      { transform: translate(100px, 95px) rotate(0deg) scale(1, 1.3) }
+    34%      { transform: translate(100px, 108px) rotate(90deg) scale(.4, 1.2) }
+    45.5%    { transform: translate(100px, 212px) rotate(90deg) scale(.4, 1.2); opacity: 1 }
+    56%      { opacity: 1 }
+    62%, 100% { transform: translate(100px, 212px) rotate(90deg) scale(.4, 1.2); opacity: 0 }
+  }
+  .bs-bottle { transform-box: fill-box; transform-origin: center; animation: bsBottle 4.4s ease-out both; }
+  @keyframes bsBottle { 0%, 22% { opacity: 0; transform: scale(.8) } 31%, 100% { opacity: 1; transform: scale(1) } }
+  .bs-glass { animation: bsGlass 4.4s ease both; }
+  @keyframes bsGlass { 0%, 52% { fill-opacity: .55; stroke: #2f5f80 } 60%, 100% { fill-opacity: 1; stroke: #ffffff } }
+  .bs-cork { animation: bsCork 4.4s ease-out both; }
+  @keyframes bsCork { 0%, 45.5% { opacity: 0; transform: translateY(-8px) } 50% { opacity: 1; transform: translateY(0) }
+    52% { fill: #b07a4a } 60%, 100% { opacity: 1; transform: translateY(0); fill: #ffffff } }
+  /* 整支瓶子：倒下浮到海面 → 往海平線越漂越遠 */
+  .bs-voyage { transform-origin: 100px 200px; animation: bsVoyage 4.4s ease-in-out both; }
+  @keyframes bsVoyage {
+    0%, 52% { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 1 }
+    64%     { transform: translate(0, 10px) rotate(-62deg) scale(.9) }
+    90%     { transform: translate(30px, -78px) rotate(-55deg) scale(.12); opacity: 1 }
+    100%    { transform: translate(32px, -80px) rotate(-55deg) scale(.1); opacity: 0 }
+  }
+  .bs-bob { animation: bsBob 1s ease-in-out 2.3s infinite alternate; }
+  @keyframes bsBob { from { transform: translateY(-3px) rotate(-3deg) } to { transform: translateY(3px) rotate(3deg) } }
+  .bs-wave { animation: bsWave 2.4s ease-in-out infinite alternate; }
+  .bs-wave.b { animation-duration: 3s; animation-direction: alternate-reverse; }
+  @keyframes bsWave { from { transform: translateX(-6px) } to { transform: translateX(6px) } }
+  @media (prefers-reduced-motion: reduce) { .bottle-scene { display: none; } }
   .anim-overlay {
     position: fixed; inset: 0; z-index: 25; display: flex; align-items: center; justify-content: center;
     pointer-events: none;
@@ -188,7 +258,7 @@
   }
   .anim-overlay.bottle .glyph { animation: bottleDrift .9s ease-in both; }
   @media (prefers-reduced-motion: reduce) {
-    .letter, .anim-overlay .glyph { animation: none !important; }
+    .anim-overlay .glyph { animation: none !important; }
   }
   .toast {
     position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #2f2a24; color: #fff;
@@ -402,6 +472,7 @@ async function makeSupabaseApi() {
     removeAdmin: nickname => rpc('admin_remove_admin', { p_nickname: nickname }),
     reply: (id, body) => rpc('reply_letter', { p_letter_id: id, p_body: body }),
     markRead: id => rpc('mark_read', { p_letter_id: id }),
+    setLetterState: (ids, st) => rpc('set_letters_state', { p_ids: ids, p_state: st }),
     block: id => rpc('block_sender', { p_letter_id: id }),
     report: (id, reason) => rpc('report_letter', { p_letter_id: id, p_reason: reason }),
     // 即時通知：收聽自己的私人頻道 inbox:<id>
@@ -458,6 +529,7 @@ function makeDemoApi() {
   // 舊版示範資料升級
   if (!db.topics) { db.topics = seedTopics(); db.topicSeq = 5; }
   if (!db.admins) db.admins = ['me'];
+  if (!db.states) db.states = {};   // 信件 id → 'hidden' / 'deleted'（示範模式只有「我」一個人）
   const topicOf = id => db.topics.find(t => t.id === id);
   const amAdmin = () => db.admins.includes('me');
   const needAdmin = () => { if (!amAdmin()) throw new Error('只有管理者可以這樣做'); };
@@ -505,12 +577,14 @@ function makeDemoApi() {
       return db.letters
         .filter(l => l.sender === ME || l.recipient === ME)
         .filter(l => !(l.recipient === ME && db.blocks.some(([a, b]) => a === ME && b === l.sender)))
+        .filter(l => db.states[l.id] !== 'deleted')
         .map(l => ({
           id: l.id, kind: l.kind, status: l.status, direction: l.sender === ME ? 'out' : 'in',
           other_name: l.kind === 'bottle' ? null : db.profiles[l.sender === ME ? l.recipient : l.sender]?.nickname,
           subject: l.subject, body_html: l.body, reply_to: l.reply_to, read_at: l.read,
           created_at: (l.recipient === ME && l.picked) || l.created,
           topic_emoji: topicOf(l.topic_id)?.emoji ?? null, topic_name: topicOf(l.topic_id)?.name ?? null,
+          hidden: db.states[l.id] === 'hidden',
         }))
         .sort((a, b) => b.created_at - a.created_at);
     },
@@ -560,6 +634,17 @@ function makeDemoApi() {
       return nid;
     },
     async markRead(id) { const l = db.letters.find(l => l.id === id && l.recipient === ME); if (l && !l.read) { l.read = Date.now(); save(); } },
+    async setLetterState(ids, st) {
+      if (!['hidden', 'visible', 'deleted'].includes(st)) throw new Error('不支援的操作');
+      let n = 0;
+      for (const id of ids) {
+        const l = db.letters.find(l => l.id === id && (l.sender === ME || l.recipient === ME));
+        if (!l || db.states[id] === 'deleted') continue;
+        if (st === 'visible') { if (db.states[id] === 'hidden') { delete db.states[id]; n++; } }
+        else { db.states[id] = st; n++; }
+      }
+      save(); return n;
+    },
     async block(id) { const l = db.letters.find(l => l.id === id && l.recipient === ME); if (l) { db.blocks.push([ME, l.sender]); save(); } },
     async report(id, reason) { db.reports.push({ id, reason }); save(); },
     async subscribe(fn) { listener = fn; },
@@ -625,7 +710,8 @@ function makeDemoApi() {
 // 畫面
 // =========================================================
 const app = $('#app');
-const state = { view: 'inbox', mail: [], openId: null, nickname: '', isAdmin: false, pickTopic: null, throwTopic: null };
+const state = { view: 'inbox', mail: [], openId: null, nickname: '', isAdmin: false, pickTopic: null, throwTopic: null,
+  showHidden: false, selecting: false, selected: new Set() };
 let api;
 
 const demoNote = () => DEMO ? `<div class="demo-note">示範模式：資料只存在這個瀏覽器。在 <code>index.html</code> 填入 Supabase 的 URL 與 key 就會接上真正的後端。</div>` : '';
@@ -647,7 +733,7 @@ function go(view, openId = null) {
 
 async function loadMail() {
   try { state.mail = await api.mailbox() || []; } catch (e) { toast(e.message); }
-  const unread = state.mail.filter(m => m.direction === 'in' && !m.read_at).length;
+  const unread = state.mail.filter(m => m.direction === 'in' && !m.read_at && !m.hidden).length;
   const badge = $('#unread');
   badge.hidden = !unread; badge.textContent = unread;
   document.title = unread ? `(${unread}) 信箋與漂流瓶` : '信箋與漂流瓶';
@@ -841,13 +927,35 @@ function render() {
   ({ inbox: viewList, sent: viewList, compose: viewCompose, sea: viewSea, read: viewRead, admin: viewAdmin })[state.view]();
 }
 
+// 隱藏／取消隱藏／刪除，處理完重新抓信
+async function applyLetterState(ids, st) {
+  await api.setLetterState(ids, st);
+  await loadMail();
+}
+
 function viewList() {
   const incoming = state.view === 'inbox';
-  const items = state.mail.filter(m => m.direction === (incoming ? 'in' : 'out'));
+  const boxName = incoming ? '收件匣' : '寄件備份';
+  const mine = state.mail.filter(m => m.direction === (incoming ? 'in' : 'out'));
+  const hiddenCount = mine.filter(m => m.hidden).length;
+  if (state.showHidden && !hiddenCount) state.showHidden = false;
+  const items = mine.filter(m => !!m.hidden === state.showHidden);
+  for (const id of [...state.selected]) if (!items.some(m => m.id === id)) state.selected.delete(id);
+  if (!items.length) state.selecting = false;
+  const n = state.selected.size;
+
   app.innerHTML = `${demoNote()}
-    <h2>${incoming ? '收件匣' : '寄件備份'}</h2>
+    <div class="list-head">
+      <h2>${state.showHidden ? `已隱藏的信<span class="muted" style="font-weight:400">・${boxName}</span>` : boxName}</h2>
+      <div class="list-tools">
+        ${items.length ? `<button class="icon-btn" id="sel">${state.selecting ? '完成' : '選取'}</button>` : ''}
+        ${state.showHidden ? `<button class="icon-btn" id="hid">← ${boxName}</button>`
+          : hiddenCount ? `<button class="icon-btn" id="hid">已隱藏 ${hiddenCount}</button>` : ''}
+      </div>
+    </div>
     ${items.length ? `<ul class="list">${items.map(m => `
-      <li class="item ${incoming && !m.read_at ? 'unread' : ''}" data-id="${m.id}">
+      <li class="item ${incoming && !m.read_at ? 'unread' : ''} ${state.selected.has(m.id) ? 'picked' : ''}" data-id="${m.id}">
+        ${state.selecting ? `<span class="check ${state.selected.has(m.id) ? 'on' : ''}"></span>` : ''}
         <span class="icon">${letterIcon(m)}</span>
         <div class="main">
           <div class="from">${esc(fromName(m))}${topicTag(m)}</div>
@@ -855,13 +963,43 @@ function viewList() {
         </div>
         <span class="date">${fmt(m.created_at)}</span>
       </li>`).join('')}</ul>`
-      : `<div class="empty-state">${incoming ? '還沒有信。寫封信給朋友，或去海邊撿個瓶子吧 🌊' : '還沒寄出任何信'}</div>`}`;
-  app.querySelectorAll('.item').forEach((li, i) => li.onclick = async () => {
-    state.from = state.view;
+      : `<div class="empty-state">${incoming ? '還沒有信。寫封信給朋友，或去海邊撿個瓶子吧 🌊' : '還沒寄出任何信'}</div>`}
+    ${state.selecting ? `
+      <div class="sel-bar">
+        <span>已選 ${n} 封</span><span style="flex:1"></span>
+        <button class="btn ghost" id="sel-all">${n === items.length ? '全不選' : '全選'}</button>
+        <button class="btn ghost" id="sel-hide" ${n ? '' : 'disabled'}>${state.showHidden ? '取消隱藏' : '隱藏'}</button>
+        <button class="btn danger" id="sel-del" ${n ? '' : 'disabled'}>刪除</button>
+      </div>` : ''}`;
+
+  app.querySelectorAll('.item').forEach(li => li.onclick = () => {
     const id = Number(li.dataset.id);
-    await playGlyphAnim('env', letterIcon(items[i]), 480);
+    if (state.selecting) {
+      state.selected.has(id) ? state.selected.delete(id) : state.selected.add(id);
+      return viewList();
+    }
+    state.from = state.view;
     go('read', id);
   });
+  if ($('#sel')) $('#sel').onclick = () => { state.selecting = !state.selecting; state.selected.clear(); viewList(); };
+  if ($('#hid')) $('#hid').onclick = () => { state.showHidden = !state.showHidden; state.selecting = false; state.selected.clear(); viewList(); };
+  if (!state.selecting) return;
+
+  const ids = () => [...state.selected];
+  const done = msg => { toast(msg); state.selecting = false; state.selected.clear(); viewList(); };
+  $('#sel-all').onclick = () => {
+    if (n === items.length) state.selected.clear(); else items.forEach(m => state.selected.add(m.id));
+    viewList();
+  };
+  $('#sel-hide').onclick = () => busy($('#sel-hide'), async () => {
+    const unhide = state.showHidden;
+    await applyLetterState(ids(), unhide ? 'visible' : 'hidden');
+    done(unhide ? `已把 ${n} 封信放回${boxName}` : `已隱藏 ${n} 封信，可以在「已隱藏」裡找回`);
+  });
+  $('#sel-del').onclick = () => {
+    if (!confirm(`確定刪除 ${n} 封信？\n\n只會從你的信箱刪除，對方那邊還看得到。\n刪除後無法復原（只想先收起來的話，可以用「隱藏」）。`)) return;
+    busy($('#sel-del'), async () => { await applyLetterState(ids(), 'deleted'); done(`已刪除 ${n} 封信`); });
+  };
 }
 
 function viewCompose() {
@@ -873,11 +1011,12 @@ function viewCompose() {
       <label for="subj">主旨</label>
       <input type="text" id="subj" maxlength="100" placeholder="（可不填）">
       <label>內容</label>
-      <div id="ed"></div>
+      <div class="scroll"><div class="scroll-paper" id="ed"></div></div>
       <div class="error" id="err"></div>
       <div class="row"><button class="btn" id="send">寄出 ✉️</button></div>
     </div>`;
   const ed = createEditor($('#ed'));
+  unrollParchment($('#ed').closest('.scroll'));
   $('#send').onclick = async () => {
     const to = $('#to').value.trim();
     if (!to) return ($('#err').textContent = '請填收件人暱稱');
@@ -950,15 +1089,16 @@ async function viewSea() {
       return;
     }
     await loadMail(); state.from = 'inbox';
-    await playGlyphAnim('env', '🍾', 480);
+    await playGlyphAnim('env', BOTTLE_ICON, 480);
     go('read', id);
   }, $('#perr'));
   $('#throw').onclick = async () => {
     if (ed.isEmpty()) return ($('#err').textContent = '瓶子裡至少要放幾個字');
     await busy($('#throw'), async () => {
       await api.throwBottle($('#bsubj').value, ed.getHTML(), state.throwTopic);
-      playGlyphAnim('bottle', '🍾', 900);   // 不用等它播完，讓畫面立刻恢復可以操作
-      toast('瓶子漂走了 🌊'); ed.clear(); $('#bsubj').value = ''; await loadMail();
+      ed.clear(); $('#bsubj').value = '';
+      playBottleScene().then(() => toast('瓶子漂走了 🌊'));   // 不用等它播完，畫面背後照常更新
+      await loadMail();
     }, $('#err'));
   };
 
@@ -1117,15 +1257,20 @@ function viewRead() {
   if (!m) return go('inbox');
   const parent = m.reply_to && state.mail.find(x => x.id === m.reply_to);
   app.innerHTML = `
-    <div class="row" style="margin:0 0 12px"><button class="btn ghost" id="back">← 返回</button></div>
-    <article class="letter">
+    <div class="read-tools">
+      <button class="btn ghost" id="back">← 返回</button>
+      <span style="flex:1"></span>
+      <button class="btn ghost" id="hide-one">${m.hidden ? '取消隱藏' : '隱藏'}</button>
+      <button class="btn danger" id="del-one">刪除</button>
+    </div>
+    <div class="scroll"><article class="letter scroll-paper">
       <div class="letter-head">
         <div class="subj">${letterIcon(m)} ${esc(m.subject || '（無主旨）')}</div>
         <div class="muted">${m.direction === 'in' ? '來自 ' : ''}${esc(fromName(m))}・${fmt(m.created_at)}${topicTag(m)}</div>
         ${parent ? `<div class="muted">↪ 回覆：<a href="#" id="parent">${esc(parent.subject || '（無主旨）')}</a></div>` : ''}
       </div>
       <div class="letter-body">${sanitize(m.body_html)}</div>
-    </article>
+    </article></div>
     ${m.direction === 'in' ? `
     <div class="card">
       <h2>回信</h2>
@@ -1138,7 +1283,20 @@ function viewRead() {
         <button class="btn danger" id="block">封鎖對方</button>
       </div>
     </div>` : ''}`;
+  unrollParchment(app.querySelector('.scroll'));
   $('#back').onclick = () => go(state.from || 'inbox');
+  $('#hide-one').onclick = () => busy($('#hide-one'), async () => {
+    await applyLetterState([m.id], m.hidden ? 'visible' : 'hidden');
+    toast(m.hidden ? '已放回信箱' : '已隱藏，可以在「已隱藏」裡找回');
+    go(state.from || 'inbox');
+  });
+  $('#del-one').onclick = () => {
+    if (!confirm('確定刪除這封信？\n\n只會從你的信箱刪除，對方那邊還看得到。\n刪除後無法復原（只想先收起來的話，可以用「隱藏」）。')) return;
+    busy($('#del-one'), async () => {
+      await applyLetterState([m.id], 'deleted');
+      toast('已刪除'); go(state.from || 'inbox');
+    });
+  };
   if (parent) $('#parent').onclick = e => { e.preventDefault(); go('read', parent.id); };
   if (m.direction !== 'in') return;
 
@@ -1172,6 +1330,89 @@ function playGlyphAnim(cls, glyph, duration) {
     ov.innerHTML = `<span class="glyph">${glyph}</span>`;
     document.body.appendChild(ov);
     setTimeout(() => { ov.remove(); resolve(); }, duration);
+  });
+}
+
+// 羊皮紙沿對角線展開：信紙從左上角露出到右下角，一卷紙沿著對角線滾過去
+function unrollParchment(wrap) {
+  const paper = wrap && wrap.querySelector('.scroll-paper');
+  if (!paper || prefersReducedMotion()) return;
+  const setClip = v => { paper.style.clipPath = v; paper.style.webkitClipPath = v; };
+  setClip('polygon(0 0, 0 0, 0 0)');   // 先藏起來，避免閃一下
+  const clip = document.createElement('div'); clip.className = 'roll-clip';
+  const roll = document.createElement('div'); roll.className = 'roll';
+  clip.appendChild(roll); wrap.appendChild(clip);
+  const dur = 1600, t0 = performance.now();
+  const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;   // 慢慢開始、中間加速、最後放慢
+  function frame(now) {
+    const W = paper.offsetWidth, H = paper.offsetHeight;
+    const L = Math.hypot(W, H) + 40;
+    const angle = Math.atan2(H, -W) * 180 / Math.PI;   // 和展開邊緣平行
+    const t = Math.min(1, (now - t0) / dur), p = ease(t);
+    setClip(`polygon(0 0, ${200 * p}% 0, 0 ${200 * p}%)`);
+    const thick = 30 - 18 * p;                         // 紙越攤越開，捲起來的那卷越來越細
+    roll.style.width = L + 'px'; roll.style.height = thick + 'px';
+    roll.style.transform = `translate(${p * W - L / 2}px, ${p * H - thick / 2}px) rotate(${angle}deg)`;
+    roll.style.opacity = p > 0.9 ? String((1 - p) / 0.1) : '1';
+    if (t < 1) requestAnimationFrame(frame);
+    else { setClip(''); clip.remove(); }
+  }
+  requestAnimationFrame(frame);
+}
+
+// 簡約風的瓶子圖示（撿瓶子時用）
+const BOTTLE_ICON = `<svg width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="#2f5f80" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true">
+  <rect x="10" y="1.8" width="4" height="2.6" rx=".8" fill="#b07a4a" stroke="none"/>
+  <path d="M10.3 4.4h3.4v3.4c0 .9 2.8 2 2.8 4.6v8.1a2 2 0 0 1-2 2H9.5a2 2 0 0 1-2-2v-8.1c0-2.6 2.8-3.7 2.8-4.6z" fill="#ffffff"/>
+  <rect x="9.6" y="12.5" width="4.8" height="6.5" rx="2.4" fill="#f1e1bb" stroke="#c9a66b" stroke-width="1"/>
+</svg>`;
+
+// 丟漂流瓶的場景：羊皮紙捲起 → 放進瓶子 → 白色瓶子在藍色的海上漂遠。點一下可以跳過
+function playBottleScene() {
+  return new Promise(resolve => {
+    if (prefersReducedMotion()) return resolve();
+    const ov = document.createElement('div');
+    ov.className = 'bottle-scene';
+    ov.setAttribute('role', 'img');
+    ov.setAttribute('aria-label', '漂流瓶漂向大海');
+    ov.innerHTML = `
+      <svg viewBox="0 0 200 300" preserveAspectRatio="xMidYMid meet">
+        <rect x="-2000" y="-2000" width="4200" height="4300" fill="#f2ede3"/>
+        <g class="bs-sea">
+          <rect x="-2000" y="-2000" width="4200" height="2120" fill="#dcebf3"/>
+          <circle cx="150" cy="72" r="11" fill="#ffffff"/>
+          <rect x="-2000" y="120" width="4200" height="2200" fill="#2f6f9f"/>
+          <g fill="none" stroke="#ffffff" stroke-linecap="round" opacity=".55">
+            <path class="bs-wave"   stroke-width="1"   d="M40 132q4-2.5 8 0t8 0M120 136q4-2.5 8 0t8 0"/>
+            <path class="bs-wave b" stroke-width="1.6" d="M18 158q6-4 12 0t12 0M140 166q6-4 12 0t12 0"/>
+            <path class="bs-wave"   stroke-width="2.2" d="M60 200q8-5 16 0t16 0M-10 236q8-5 16 0t16 0M150 228q8-5 16 0t16 0"/>
+            <path class="bs-wave b" stroke-width="2.8" d="M90 270q10-6 20 0t20 0M10 290q10-6 20 0t20 0"/>
+          </g>
+        </g>
+        <g class="bs-voyage"><g class="bs-bob">
+          <g class="bs-sheet">
+            <rect x="60" y="95" width="80" height="100" rx="4" fill="#f1e1bb" stroke="#c9a66b" stroke-width="1.5"/>
+            <g stroke="#d3b57f" stroke-width="2" stroke-linecap="round">
+              <path d="M72 118h56M72 132h56M72 146h56M72 160h40"/>
+            </g>
+          </g>
+          <g class="bs-scroll">
+            <rect x="-43" y="-5" width="86" height="10" rx="5" fill="#e8d2a2" stroke="#c9a66b" stroke-width="1.2"/>
+          </g>
+          <g class="bs-bottle">
+            <path class="bs-glass" fill="#ffffff" stroke-width="3" stroke-linejoin="round"
+              d="M93 145h14v22c0 6 15 11 15 26v45a10 10 0 0 1-10 10H88a10 10 0 0 1-10-10v-45c0-15 15-20 15-26z"/>
+            <rect class="bs-cork" x="92" y="135" width="16" height="11" rx="3" fill="#b07a4a"/>
+          </g>
+        </g></g>
+      </svg>
+      <div class="skip">點一下略過</div>`;
+    let done = false;
+    const finish = () => { if (done) return; done = true; ov.remove(); resolve(); };
+    ov.addEventListener('click', finish);
+    ov.addEventListener('animationend', e => { if (e.target === ov) finish(); });
+    setTimeout(finish, 5000);   // 保險：動畫事件沒觸發也會結束
+    document.body.appendChild(ov);
   });
 }
 
@@ -1242,7 +1483,7 @@ async function start() {
   syncPush().then(setupBell);
 }
 
-$('#nav').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { if (b.dataset.view === 'inbox' || b.dataset.view === 'sent') loadMail().then(() => go(b.dataset.view)); else go(b.dataset.view); } });
+$('#nav').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { state.showHidden = false; state.selecting = false; state.selected.clear(); if (b.dataset.view === 'inbox' || b.dataset.view === 'sent') loadMail().then(() => go(b.dataset.view)); else go(b.dataset.view); } });
 $('#logout').onclick = async () => {
   await disablePushForThisDevice();   // 登出後這台裝置就不再收到這個帳號的通知
   await api.unsubscribe(); await api.signOut();
