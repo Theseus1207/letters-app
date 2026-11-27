@@ -150,6 +150,17 @@
   }
   .topic-desc { font-size: .85rem; color: var(--muted); min-height: 1.3em; margin-top: 6px; }
 
+  /* ---------- 信裡的圖片 ---------- */
+  .letter-body img, .editable img {
+    display: inline-block; vertical-align: top; max-width: 100%; height: auto; border-radius: 8px; margin: 8px 0;
+    box-shadow: 0 1px 4px #0002; cursor: zoom-in;
+  }
+  .editable img { cursor: pointer; }
+  .lightbox {
+    position: fixed; inset: 0; z-index: 45; background: #000d; display: flex; align-items: center; justify-content: center;
+    padding: env(safe-area-inset-top) 12px env(safe-area-inset-bottom); cursor: zoom-out;
+  }
+  .lightbox img { max-width: 100%; max-height: 92vh; border-radius: 6px; }
   /* ---------- 隱藏／刪除、多選 ---------- */
   .list-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
   .list-head h2 { margin: 0; flex: 1; min-width: 0; }
@@ -313,7 +324,24 @@ function toast(msg) {
 // ---------- HTML 消毒：只留下文書格式，拿掉所有屬性與危險標籤 ----------
 // 信件內容是陌生人寫的，顯示前一定要經過這一步，避免 XSS
 const ALLOWED = new Set(['P', 'BR', 'DIV', 'B', 'STRONG', 'I', 'EM', 'U', 'S', 'STRIKE', 'DEL', 'UL', 'OL', 'LI', 'BLOCKQUOTE', 'H2']);
-const DROP = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'TEMPLATE', 'NOSCRIPT', 'SVG', 'MATH', 'HEAD', 'TITLE', 'META', 'LINK', 'TEXTAREA', 'SELECT', 'BUTTON', 'INPUT', 'FORM', 'IMG', 'VIDEO', 'AUDIO']);
+const DROP = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'TEMPLATE', 'NOSCRIPT', 'SVG', 'MATH', 'HEAD', 'TITLE', 'META', 'LINK', 'TEXTAREA', 'SELECT', 'BUTTON', 'INPUT', 'FORM', 'VIDEO', 'AUDIO']);
+const MAX_IMAGES = 4;
+// 只允許顯示「自己的 Supabase 專案、letter-images 裡、隨機檔名」的圖片
+// 外部網址的圖片一律拿掉：避免有人用外部圖片追蹤讀信人的 IP
+const SUPABASE_HOST = (() => { try { return new URL(SUPABASE_URL).host; } catch { return ''; } })();
+function isAllowedImageSrc(src) {
+  src = String(src || '');
+  if (DEMO) return /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(src);
+  let u; try { u = new URL(src); } catch { return false; }
+  return u.protocol === 'https:' && u.host === SUPABASE_HOST && !u.search && !u.hash &&
+    /^\/storage\/v1\/object\/public\/letter-images\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$/.test(u.pathname);
+}
+// 段落的對齊方式：只認「置中」「靠右」，其他樣式一律不保留
+const ALIGNABLE = new Set(['P', 'DIV', 'H2', 'BLOCKQUOTE', 'LI']);
+function alignOf(n) {
+  const v = String((n.style && n.style.textAlign) || n.getAttribute('align') || '').toLowerCase();
+  return v === 'center' ? 'center' : (v === 'right' || v === 'end') ? 'right' : '';
+}
 function sanitize(html) {
   const src = new DOMParser().parseFromString(String(html ?? ''), 'text/html').body;
   const out = document.createElement('div');
@@ -323,17 +351,69 @@ function sanitize(html) {
       else if (n.nodeType === Node.ELEMENT_NODE) {
         const tag = n.tagName.toUpperCase();
         if (DROP.has(tag)) continue;
-        if (ALLOWED.has(tag)) { const el = document.createElement(tag); to.appendChild(el); walk(n, el); }
+        if (tag === 'IMG') {
+          const src = n.getAttribute('src');
+          if (isAllowedImageSrc(src)) { const img = document.createElement('img'); img.src = src; img.alt = ''; img.loading = 'lazy'; to.appendChild(img); }
+          continue;
+        }
+        if (ALLOWED.has(tag)) {
+          const el = document.createElement(tag);
+          if (ALIGNABLE.has(tag)) { const a = alignOf(n); if (a) el.style.textAlign = a; }
+          to.appendChild(el); walk(n, el);
+        }
         else walk(n, to); // 不認識的標籤：拆掉外殼，保留裡面的文字
       }
     }
   })(src, out);
   return out.innerHTML;
 }
+const hasImage = html => /<img\s/i.test(String(html ?? ''));
 const plainText = html => new DOMParser().parseFromString(String(html ?? ''), 'text/html').body.textContent.replace(/ /g, ' ').trim();
 
+// ---------- 圖片：縮小、壓縮成 JPEG ----------
+// 重新畫一次到 canvas 再輸出，照片裡的拍攝地點（GPS）等資訊會一起被清掉
+async function compressImage(file, maxDim = 1600, quality = 0.85) {
+  if (!file || !/^image\//.test(file.type)) throw new Error('只能放圖片檔');
+  if (file.size > 25 * 1024 * 1024) throw new Error('圖片太大了（上限 25MB）');
+  let src;
+  try { src = await createImageBitmap(file, { imageOrientation: 'from-image' }); }
+  catch {
+    src = await new Promise((res, rej) => {
+      const im = new Image();
+      im.onload = () => res(im);
+      im.onerror = () => rej(new Error('這張圖片讀不出來，換一張試試（iPhone 的 HEIC 請用相簿直接選）'));
+      im.src = URL.createObjectURL(file);
+    });
+  }
+  const w0 = src.width, h0 = src.height;
+  const k = Math.min(1, maxDim / Math.max(w0, h0));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(w0 * k)); c.height = Math.max(1, Math.round(h0 * k));
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height);   // 透明背景補白
+  ctx.drawImage(src, 0, 0, c.width, c.height);
+  return await new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error('圖片處理失敗')), 'image/jpeg', quality));
+}
+function randomUUID() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40; b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map(x => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+// 點圖片看大圖
+function openLightbox(src) {
+  const ov = document.createElement('div');
+  ov.className = 'lightbox';
+  const img = document.createElement('img'); img.src = src; img.alt = '';
+  ov.appendChild(img);
+  ov.onclick = () => ov.remove();
+  document.body.appendChild(ov);
+}
+
 // =========================================================
-// 文書編輯器（粗體、斜體、底線、刪除線、標題、引用、列點、編號）
+// 文書編輯器（粗體、斜體、底線、刪除線、標題、引用、列點、編號、圖片）
 // =========================================================
 const TOOLS = [
   { cmd: 'bold', label: '<b>B</b>', title: '粗體 (Ctrl+B)' },
@@ -345,6 +425,11 @@ const TOOLS = [
   { block: 'blockquote', label: '❝', title: '引用' },
   { cmd: 'insertUnorderedList', label: '•≡', title: '項目符號' },
   { cmd: 'insertOrderedList', label: '1.≡', title: '編號清單' },
+  { sep: true },
+  { cmd: 'justifyLeft', label: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="vertical-align:-3px"><path d="M4 6h16M4 10h10M4 14h16M4 18h10"/></svg>', title: '靠左' },
+  { cmd: 'justifyCenter', label: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="vertical-align:-3px"><path d="M4 6h16M7 10h10M4 14h16M7 18h10"/></svg>', title: '置中' },
+  { cmd: 'justifyRight', label: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="vertical-align:-3px"><path d="M4 6h16M10 10h10M4 14h16M10 18h10"/></svg>', title: '靠右' },
+  { act: 'image', title: '插入圖片', label: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-3px"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 17-5-5-9 8"/></svg>' },
   { sep: true },
   { cmd: 'undo', label: '↶', title: '復原' },
   { cmd: 'redo', label: '↷', title: '重做' },
@@ -360,10 +445,14 @@ function createEditor(host, { placeholder = '親愛的……' } = {}) {
       </div>
       <div class="editable empty" contenteditable="true" data-placeholder="${esc(placeholder)}"></div>
       <div class="count"></div>
+      <input type="file" accept="image/*" multiple hidden>
     </div>`;
   const area = $('.editable', host);
   const bar = $('.toolbar', host);
   const count = $('.count', host);
+  const fileInput = $('input[type=file]', host);
+  let uploading = 0;
+  let savedRange = null;   // 選圖片時游標會跑掉，先記住插入的位置
 
   const exec = (cmd, val = null) => { area.focus(); document.execCommand(cmd, false, val); refresh(); };
   const currentBlock = () => {
@@ -375,15 +464,58 @@ function createEditor(host, { placeholder = '親愛的……' } = {}) {
     const b = e.target.closest('button'); if (!b) return;
     e.preventDefault();
     const t = TOOLS[b.dataset.i];
+    if (t.act === 'image') return;   // 圖片按鈕在 click 才開選檔視窗（手機要在點擊當下開）
     try { document.execCommand('styleWithCSS', false, false); } catch {}
     if (t.block) exec('formatBlock', currentBlock() === t.block ? '<p>' : `<${t.block}>`);
     else exec(t.cmd);
   });
 
+  // ---------- 插入圖片 ----------
+  bar.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b || TOOLS[b.dataset.i]?.act !== 'image') return;
+    fileInput.value = '';
+    fileInput.click();
+  });
+  fileInput.addEventListener('change', () => addImages([...fileInput.files]));
+
+  function insertAtSaved(html) {
+    area.focus();
+    const sel = getSelection();
+    if (savedRange && area.contains(savedRange.startContainer)) { sel.removeAllRanges(); sel.addRange(savedRange); }
+    else { const r = document.createRange(); r.selectNodeContents(area); r.collapse(false); sel.removeAllRanges(); sel.addRange(r); }
+    document.execCommand('insertHTML', false, html);
+    if (sel.rangeCount) savedRange = sel.getRangeAt(0).cloneRange();
+    refresh();
+  }
+
+  async function addImages(files) {
+    files = files.filter(f => /^image\//.test(f.type));
+    if (!files.length) return;
+    const room = MAX_IMAGES - area.querySelectorAll('img').length - uploading;
+    if (room <= 0) return toast(`一封信最多放 ${MAX_IMAGES} 張圖片`);
+    if (files.length > room) toast(`一封信最多放 ${MAX_IMAGES} 張圖片，只加入前 ${room} 張`);
+    for (const f of files.slice(0, room)) {
+      uploading++; refresh();
+      try {
+        const blob = await compressImage(f, DEMO ? 900 : 1600, DEMO ? 0.7 : 0.85);
+        const url = await api.uploadImage(blob);
+        insertAtSaved(`<img src="${esc(url)}" alt=""><br>`);
+      } catch (err) { toast(err.message || '圖片上傳失敗'); }
+      finally { uploading--; refresh(); }
+    }
+  }
+
+  // 編輯中點一下圖片可以移除（手機上不好用退格鍵刪圖）
+  area.addEventListener('click', e => {
+    if (e.target.tagName !== 'IMG') return;
+    if (confirm('移除這張圖片？')) { e.target.remove(); refresh(); }
+  });
+
   function refresh() {
-    const isEmpty = !plainText(area.innerHTML) && !area.querySelector('li');
+    const isEmpty = !plainText(area.innerHTML) && !area.querySelector('li, img');
     area.classList.toggle('empty', isEmpty);
-    count.textContent = `${plainText(area.innerHTML).length} 字`;
+    const imgs = area.querySelectorAll('img').length;
+    count.textContent = `${plainText(area.innerHTML).length} 字` + (imgs ? `・${imgs} 張圖片` : '') + (uploading ? `・圖片上傳中（${uploading}）…` : '');
     if (document.activeElement !== area) return;
     const blk = currentBlock();
     bar.querySelectorAll('button').forEach(b => {
@@ -399,11 +531,18 @@ function createEditor(host, { placeholder = '親愛的……' } = {}) {
   area.addEventListener('input', refresh);
   area.addEventListener('keyup', refresh);
   area.addEventListener('mouseup', refresh);
-  document.addEventListener('selectionchange', () => { if (document.activeElement === area) refresh(); });
+  document.addEventListener('selectionchange', () => {
+    if (document.activeElement !== area) return;
+    const sel = getSelection();
+    if (sel.rangeCount && area.contains(sel.getRangeAt(0).startContainer)) savedRange = sel.getRangeAt(0).cloneRange();
+    refresh();
+  });
 
   // 貼上時也消毒，避免把網頁的奇怪樣式、圖片、連結帶進來
   area.addEventListener('paste', e => {
     e.preventDefault();
+    const imgs = [...(e.clipboardData.files || [])].filter(f => /^image\//.test(f.type));
+    if (imgs.length) return addImages(imgs);   // 直接貼上截圖或照片
     const html = e.clipboardData.getData('text/html');
     if (html) document.execCommand('insertHTML', false, sanitize(html));
     else document.execCommand('insertText', false, e.clipboardData.getData('text/plain'));
@@ -413,7 +552,8 @@ function createEditor(host, { placeholder = '親愛的……' } = {}) {
   refresh();
   return {
     getHTML: () => sanitize(area.innerHTML),
-    isEmpty: () => !plainText(area.innerHTML),
+    isEmpty: () => !plainText(area.innerHTML) && !area.querySelector('img'),
+    isUploading: () => uploading > 0,
     clear: () => { area.innerHTML = ''; refresh(); },
     focus: () => area.focus(),
   };
@@ -473,6 +613,14 @@ async function makeSupabaseApi() {
     reply: (id, body) => rpc('reply_letter', { p_letter_id: id, p_body: body }),
     markRead: id => rpc('mark_read', { p_letter_id: id }),
     setLetterState: (ids, st) => rpc('set_letters_state', { p_ids: ids, p_state: st }),
+    // 圖片存到 Storage 的 letter-images（公開讀取、隨機檔名、檔名不含使用者資訊）
+    async uploadImage(blob) {
+      const name = randomUUID() + '.jpg';
+      const bucket = sb.storage.from('letter-images');
+      const { error } = await bucket.upload(name, blob, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: false });
+      if (error) throw new Error('圖片上傳失敗：' + error.message);
+      return bucket.getPublicUrl(name).data.publicUrl;
+    },
     block: id => rpc('block_sender', { p_letter_id: id }),
     report: (id, reason) => rpc('report_letter', { p_letter_id: id, p_reason: reason }),
     // 即時通知：收聽自己的私人頻道 inbox:<id>
@@ -538,7 +686,7 @@ function makeDemoApi() {
   const blocked = (a, b) => db.blocks.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
   const check = body => {
     if (!db.profiles[ME]) throw new Error('請先設定暱稱');
-    if (!plainText(body)) throw new Error('信件內容不能是空的');
+    if (!plainText(body) && !hasImage(body)) throw new Error('信件內容不能是空的');
     if (body.length > MAX_HTML) throw new Error('信件太長了');
   };
   const add = l => { const row = { id: ++db.seq, reply_to: null, picked: null, read: null, created: Date.now(), ...l }; db.letters.push(row); save(); return row.id; };
@@ -634,6 +782,10 @@ function makeDemoApi() {
       return nid;
     },
     async markRead(id) { const l = db.letters.find(l => l.id === id && l.recipient === ME); if (l && !l.read) { l.read = Date.now(); save(); } },
+    // 示範模式：圖片直接存成 data URL（只存在這個瀏覽器）
+    async uploadImage(blob) {
+      return await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(new Error('圖片讀取失敗')); r.readAsDataURL(blob); });
+    },
     async setLetterState(ids, st) {
       if (!['hidden', 'visible', 'deleted'].includes(st)) throw new Error('不支援的操作');
       let n = 0;
@@ -959,7 +1111,7 @@ function viewList() {
         <span class="icon">${letterIcon(m)}</span>
         <div class="main">
           <div class="from">${esc(fromName(m))}${topicTag(m)}</div>
-          <div class="subj">${esc(m.subject || '（無主旨）')} — ${esc(plainText(m.body_html).slice(0, 60))}</div>
+          <div class="subj">${esc(m.subject || '（無主旨）')} — ${hasImage(m.body_html) ? '［圖片］' : ''}${esc(plainText(m.body_html).slice(0, 60))}</div>
         </div>
         <span class="date">${fmt(m.created_at)}</span>
       </li>`).join('')}</ul>`
@@ -1021,6 +1173,7 @@ function viewCompose() {
     const to = $('#to').value.trim();
     if (!to) return ($('#err').textContent = '請填收件人暱稱');
     if (ed.isEmpty()) return ($('#err').textContent = '信件內容不能是空的');
+    if (ed.isUploading()) return ($('#err').textContent = '圖片還在上傳，等一下再寄');
     await busy($('#send'), async () => {
       await api.send(to, $('#subj').value, ed.getHTML());
       toast('信寄出去了！'); await loadMail(); go('sent');
@@ -1093,7 +1246,8 @@ async function viewSea() {
     go('read', id);
   }, $('#perr'));
   $('#throw').onclick = async () => {
-    if (ed.isEmpty()) return ($('#err').textContent = '瓶子裡至少要放幾個字');
+    if (ed.isEmpty()) return ($('#err').textContent = '瓶子裡至少要放點什麼');
+    if (ed.isUploading()) return ($('#err').textContent = '圖片還在上傳，等一下再寄');
     await busy($('#throw'), async () => {
       await api.throwBottle($('#bsubj').value, ed.getHTML(), state.throwTopic);
       ed.clear(); $('#bsubj').value = '';
@@ -1284,6 +1438,7 @@ function viewRead() {
       </div>
     </div>` : ''}`;
   unrollParchment(app.querySelector('.scroll'));
+  app.querySelectorAll('.letter-body img').forEach(img => img.onclick = () => openLightbox(img.src));
   $('#back').onclick = () => go(state.from || 'inbox');
   $('#hide-one').onclick = () => busy($('#hide-one'), async () => {
     await applyLetterState([m.id], m.hidden ? 'visible' : 'hidden');
@@ -1304,6 +1459,7 @@ function viewRead() {
   const ed = createEditor($('#ed'), { placeholder: '寫點什麼回覆對方……' });
   $('#reply').onclick = async () => {
     if (ed.isEmpty()) return ($('#err').textContent = '回信內容不能是空的');
+    if (ed.isUploading()) return ($('#err').textContent = '圖片還在上傳，等一下再寄');
     await busy($('#reply'), async () => {
       await api.reply(m.id, ed.getHTML());
       toast('回信寄出了！'); await loadMail(); go('sent');
